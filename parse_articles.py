@@ -39,10 +39,13 @@ def get_articles(articles_file):
     with open(articles_file, 'r') as f_handle:
         articles_arr = []
         regexp = re.compile('\\[.*?=\".*?\"\\]')
-        for article_str in f_handle:
-            article = json.loads(article_str)
-            text = BeautifulSoup(article.get('body', '')).get_text().replace('\n', '. ').strip()
-            article['text'] = ' '.join(regexp.split(text))
+        cnt = 0
+        articles = json.load(f_handle)
+        for article in articles:
+            # print(article['content_text'])
+            # article = json.loads(article_str)
+            # text = BeautifulSoup(article.get('body', '')).get_text().replace('\n', '. ').strip()
+            # article['text'] = ' '.join(regexp.split(text))
             articles_arr.append(article)
     return articles_arr
 
