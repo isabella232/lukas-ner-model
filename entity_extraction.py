@@ -1,8 +1,17 @@
 from transformers import pipeline
-from parse_articles import get_articles
 import re
 import json
 import jsonlines
+
+
+def get_articles(articles_file):
+    with open(articles_file, 'r') as f_handle:
+        articles_arr = []
+        articles = json.load(f_handle)
+        for article in articles:
+            articles_arr.append(article)
+    return articles_arr
+
 
 def format_entities(raw_entities):
     formatted_entities = []
@@ -46,16 +55,13 @@ def format_entities(raw_entities):
             end_of_sentence = subseq['index'] < current['index']
             end_of_entity_series = no_subtokens > 1 and not subseq['word'].startswith('##')
 
-        if end_of_article or end_of_sentence or end_of_entity_series:
-            latest_score = formatted_entities[-1]['score'][-1]
-            latest_score = latest_score / no_subtokens
+        if (end_of_article or end_of_sentence) or end_of_entity_series:
+            formatted_entities[-1]['score'][-1] = formatted_entities[-1]['score'][-1] / no_subtokens
             no_subtokens = 1
-
     return formatted_entities
     
 
 nlp = pipeline('ner', model='KB/bert-base-swedish-cased-ner', tokenizer='KB/bert-base-swedish-cased-ner')
-
 articles = get_articles('data/small.json')
 
 article_cnt = 0
@@ -82,12 +88,12 @@ for count, article in enumerate(articles):
     json_output += [{'article': article, 'entities': formatted_entities}]
     print(count + 1)
 
-    # for entity in formatted_entities:
-    #     if isinstance(entity['entity'], list): print('mixed:', entity)
-    #     for score in entity['score']:
-    #         if score > 1:
-    #             print('failed:', entity)
-    #             exit()
+    for entity in formatted_entities:
+        # if isinstance(entity['entity'], list): print('mixed:', entity)
+        for score in entity['score']:
+            if score > 1:
+                print('failed:', entity)
+                exit()
 
 with jsonlines.open('data/results.jsonl', mode='w') as writer:
     for article in json_output:
@@ -96,5 +102,3 @@ with jsonlines.open('data/results.jsonl', mode='w') as writer:
 with jsonlines.open('data/failed.jsonl', mode='w') as writer:
     for article in failed_articles:
         writer.write(article)
-
-# TODO: hist för antal entiteter/artikel (baserat på artikellängd) samt för mest frekventa entiteter/(topp)kategori, 17 st
