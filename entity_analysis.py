@@ -26,8 +26,8 @@ with jsonlines.open('data/results.jsonl') as reader:
 articles_df = pd.DataFrame(articles_list)
 entities_df = pd.DataFrame(entities_list)
 entities_df['word'] = entities_df['word'].str.lower()
-ambigous_df = entities_df[entities_df['entity'].apply(lambda x: type(x) == list)]
-ambigous_share = len(ambigous_df.index) / len(entities_df.index)
+ambiguous_df = entities_df[entities_df['entity'].apply(lambda x: type(x) == list)]
+ambiguous_share = len(ambiguous_df.index) / len(entities_df.index)
 entities_df = entities_df[entities_df['entity'].apply(lambda x: type(x) != list)]
 essentials_df = entities_df[(entities_df['entity'] == 'PER') | (entities_df['entity'] == 'ORG') | (entities_df['entity'] == 'LOC')]
 
@@ -38,8 +38,8 @@ print('-' * 200)
 print('ENTITIES')
 print(entities_df)
 print('-' * 200)
-print('AMBIGOUS ENTITIES')
-print(ambigous_df)
+print('AMBIGUOUS ENTITIES')
+print(ambiguous_df)
 print('-' * 200)
 print('ESSENTIAL ENTITIES')
 print(essentials_df)
@@ -48,14 +48,14 @@ print('-' * 200)
 tot_len = len(entities_df.index)
 avg_score = calculate_average_score(entities_df)
 avg_no_entities = tot_len / len(articles_df.index)
-ambigous_score = calculate_average_score(ambigous_df)
-ambigous_no = len(ambigous_df) / len(articles_df)
+ambiguous_score = calculate_average_score(ambiguous_df)
+ambiguous_no = len(ambiguous_df) / len(articles_df)
 essentials_score = calculate_average_score(essentials_df)
 essentials_no = len(essentials_df) / len(articles_df)
 essentials_share = len(essentials_df.index) / tot_len
 
 print('Total:\t\taverage score =', avg_score, '| average number of entities per article =', avg_no_entities)
-print('Ambigous:\taverage score =', ambigous_score, '| average number of entities per article =', ambigous_no, '| share =', ambigous_share)
+print('Ambiguous:\taverage score =', ambiguous_score, '| average number of entities per article =', ambiguous_no, '| share =', ambiguous_share)
 print('Essentials:\taverage score =', essentials_score, '| average number of entities per article =', essentials_no, '| share =', essentials_share)
 print('-' * 200)
 
@@ -73,7 +73,18 @@ unique_entities = unique_entities.rename(columns={'article_id': 'no_occurences'}
 print(unique_entities.head(20))
 count = pd.DataFrame(unique_entities.groupby('no_occurences').size()).reset_index().rename(columns={0: 'no_words'})
 count = count[count['no_words'] > 1]
-plt.plot(count['no_occurences'], count['no_words'])
+count.plot(x='no_occurences', y='no_words')
+
+per_article = []
+grouped_entities = entities_df.groupby(['article_id']).count().reset_index()
+for ind in articles_df.index:
+    no_entities = grouped_entities[grouped_entities['article_id'] == articles_df['id'][ind]]['index']
+    no_entities = no_entities.item() if len(no_entities) > 0 else 0
+    article_len = len(articles_df['content_text'][ind])
+    per_article += [{'no_entities': no_entities, 'article_len': article_len}]
+
+per_article_df = pd.DataFrame(per_article).sort_values(by=['no_entities'], ascending=False)
+per_article_df.plot(x='no_entities', y='article_len')
 #plt.show()
 
 categories_list = []

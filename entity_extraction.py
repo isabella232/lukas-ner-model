@@ -62,7 +62,7 @@ def format_entities(raw_entities):
     
 
 nlp = pipeline('ner', model='KB/bert-base-swedish-cased-ner', tokenizer='KB/bert-base-swedish-cased-ner')
-articles = get_articles('data/small.json')
+articles = get_articles('data/articles.json')
 
 article_cnt = 0
 json_output = []
