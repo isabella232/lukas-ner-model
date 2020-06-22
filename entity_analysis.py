@@ -2,6 +2,7 @@ import pandas as pd
 import jsonlines
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
 
 def calculate_average_score(df):
     tot_score = 0
@@ -11,6 +12,20 @@ def calculate_average_score(df):
         tot_score += sum(scores)
         no_scores += len(scores)
     return tot_score / no_scores
+
+def merge_entities(df):
+    to_be_removed = []
+    for i in df.index:
+        i_w = df['word'][i]
+        print(i)
+        for j in df.index:
+            j_w = df['word'][j]
+            if i_w == j_w.lower() or i_w == j_w[:-1]:
+                df['no_occurences'][j] += 1
+                to_be_removed += [df['word'][i]]
+    return to_be_removed
+
+
 
 with jsonlines.open('data/results.jsonl') as reader:
     articles_list = []
@@ -25,11 +40,12 @@ with jsonlines.open('data/results.jsonl') as reader:
 
 articles_df = pd.DataFrame(articles_list)
 entities_df = pd.DataFrame(entities_list)
-entities_df['word'] = entities_df['word'].str.lower()
+entities_df = entities_df[entities_df['word'] != 's']
+#entities_df['word'] = entities_df['word'].str.lower()
 ambiguous_df = entities_df[entities_df['entity'].apply(lambda x: type(x) == list)]
 ambiguous_share = len(ambiguous_df.index) / len(entities_df.index)
 entities_df = entities_df[entities_df['entity'].apply(lambda x: type(x) != list)]
-essentials_df = entities_df[(entities_df['entity'] == 'PER') | (entities_df['entity'] == 'ORG') | (entities_df['entity'] == 'LOC')]
+essentials_df = entities_df[(entities_df['entity'] == 'PER') | (entities_df['entity'] == 'ORG') | (entities_df['entity'] == 'LOC') | (entities_df['entity'] == 'EVN')]
 
 print('-' * 200)
 print('ARTICLES')
@@ -68,9 +84,11 @@ for ent_type in ent_types:
 print('-' * 200)
 
 print('NUMBER OF OCURRENCES PER ENTITY')
-unique_entities = pd.DataFrame(essentials_df.groupby(['word'])['article_id'].nunique()).reset_index()
+unique_entities = pd.DataFrame(essentials_df.groupby('word')['article_id'].nunique()).reset_index()
 unique_entities = unique_entities.rename(columns={'article_id': 'no_occurences'}).sort_values(by=['no_occurences'], ascending=False)
-print(unique_entities.head(20))
+# merged_entities = merge_entities(unique_entities)
+# print(merged_entities)
+print(unique_entities)
 count = pd.DataFrame(unique_entities.groupby('no_occurences').size()).reset_index().rename(columns={0: 'no_words'})
 count = count[count['no_words'] > 1]
 count.plot(x='no_occurences', y='no_words')
@@ -85,12 +103,57 @@ for ind in articles_df.index:
 
 per_article_df = pd.DataFrame(per_article).sort_values(by=['no_entities'], ascending=False)
 per_article_df.plot(x='no_entities', y='article_len')
-#plt.show()
 
 categories_list = []
 for ind in articles_df.index:
+    is_mittmedia = articles_df['brand'][ind] == 'MITTMEDIA'
     for tag in articles_df['tags'][ind]:
-        if tag['category'].startswith('RYF-'):
-            categories_list += [{'category': tag['category'], 'article_id': articles_df['id'][ind]}]
+        if not is_mittmedia or (is_mittmedia and tag['category'].startswith('RYF-')):
+            categories_list += [{'category': tag['name'], 'article_id': articles_df['id'][ind]}]
 categories_df = pd.DataFrame(categories_list)
-print(categories_df.groupby(['category']).sum())
+categories_df = categories_df.groupby('category')['article_id'].apply(list).reset_index(name='article_ids')
+categories_df['len'] = categories_df['article_ids'].str.len()
+categories_df = categories_df.sort_values(by='len', ascending=False).drop(columns='len')
+
+new_column = []
+for i in categories_df.index:
+    cat_ent = []
+    cat_cnt = []
+    for article_id in categories_df['article_ids'][i]:
+        filtered = essentials_df[essentials_df['article_id'] == article_id]
+        for j in filtered.index:
+            if filtered['word'][j] in cat_ent:
+                cat_cnt[cat_ent.index(filtered['word'][j])] += 1
+            else:
+                cat_ent += [filtered['word'][j]]
+                cat_cnt += [1]
+    new_column += [sorted(zip(cat_cnt,cat_ent), reverse=True)]
+
+categories_df['entities'] = new_column
+
+most_frequent = categories_df.head(5)
+for ind in most_frequent.index:
+    print('\n', most_frequent['category'][ind])
+    for entity in most_frequent['entities'][ind]:
+        if entity[0] > 10: print(entity)
+
+categories_df['no_unique_entities'] = categories_df['entities'].str.len()
+
+tot_no = []
+for ind in categories_df.index:
+    tot_no += [0]
+    for i, entity in enumerate(categories_df['entities'][ind]):
+        if entity: tot_no[-1] += entity[0]
+
+categories_df['tot_no_entities'] = tot_no
+
+x = categories_df['no_unique_entities'].values.reshape(-1, 1)
+y = categories_df['tot_no_entities'].values.reshape(-1, 1)
+linear_regressor = LinearRegression().fit(x, y)
+y_pred = linear_regressor.predict(x)
+print(linear_regressor.coef_)
+plt.scatter(x, y)
+plt.plot(x, y_pred, color='red')
+hist = categories_df.hist(bins=70)
+plt.show()
+
