@@ -4,3 +4,5 @@ psycopg2-binary
 beautifulsoup4
 pandas
 jsonlines
+matplotlib
+sklearn
