@@ -82,14 +82,14 @@ def merge_entities(df):
     for i in df.index:
         i_w = df['word'][i]
         if len(i_w) < 3: continue
-        if i % 1000 == 0: print(i, i_w.lower()[0])
+        # if i % 1000 == 0: print(i, i_w.lower()[0])
         for j in df.index[i+1:]:
             j_w = df['word'][j]
             if not i_w.lower()[0] == j_w.lower()[0]: break
             if i_w == j_w.lower() or i_w == j_w[:-1]:
                 df.at[i, 'no_occurrences'] += df.at[j, 'no_occurrences']
                 # print('To be merged:', i_w, j_w)
-                to_be_removed += [df['word'][j]]
+                to_be_removed += [j_w]
     return df[df['word'].apply(lambda x: x not in to_be_removed)]
 
 
@@ -121,25 +121,34 @@ def link_entities_to_categories(articles_df, essentials_df):
         new_column += [sorted(zip(cat_cnt,cat_ent), reverse=True)]
 
     categories_df['entities'] = new_column
+    categories_df['no_unique_entities'] = categories_df['entities'].str.len()
 
     most_frequent = categories_df.head(5)
+    print(most_frequent)
     for ind in most_frequent.index:
         print('\n', most_frequent['category'][ind])
         for entity in most_frequent['entities'][ind]:
             if entity[0] > 10: print(entity)
 
-    categories_df['no_unique_entities'] = categories_df['entities'].str.len()
-
     tot_no = []
     for ind in categories_df.index:
         tot_no += [0]
-        for i, entity in enumerate(categories_df['entities'][ind]):
+        for entity in categories_df['entities'][ind]:
             if entity: tot_no[-1] += entity[0]
 
     categories_df['tot_no_entities'] = tot_no
 
     return categories_df
 
+
+def linear_regression(x_df, y_df):
+    x = x_df.values.reshape(-1, 1)
+    y = y_df.values.reshape(-1, 1)
+    linear_regressor = LinearRegression().fit(x, y)
+    y_pred = linear_regressor.predict(x)
+    print('Linear regression slope:', linear_regressor.coef_)
+    plt.scatter(x, y)
+    plt.plot(x, y_pred, color='red')
 
 data_frames = create_data_frames()
 articles_df = data_frames[0]
@@ -155,9 +164,9 @@ unique_entities = unique_entities.rename(columns={'article_id': 'no_occurrences'
 merged_entities = merge_entities(unique_entities)
 merged_entities = merged_entities.sort_values(by=['no_occurrences'], ascending=False)
 print(merged_entities)
-count = pd.DataFrame(merged_entities.groupby('no_occurrences').size()).reset_index().rename(columns={0: 'no_words'})
-count = count[count['no_words'] > 1]
-count.plot(x='no_occurrences', y='no_words')
+count = pd.DataFrame(merged_entities.groupby('no_occurrences').size()).reset_index().rename(columns={0: 'no_entities'})
+count = count[count['no_entities'] > 1]
+count.plot(x='no_occurrences', y='no_entities')
 
 per_article = []
 grouped_entities = entities_df.groupby(['article_id']).count().reset_index()
@@ -168,17 +177,13 @@ for ind in articles_df.index:
     per_article += [{'no_entities': no_entities, 'article_len': article_len}]
 
 per_article_df = pd.DataFrame(per_article).sort_values(by=['no_entities'], ascending=False)
-per_article_df.plot(x='no_entities', y='article_len')
+linear_regression(per_article_df['no_entities'], per_article_df['article_len'])
+#plt.show()
 
 categories_df = link_entities_to_categories(articles_df, essentials_df)
-
-x = categories_df['no_unique_entities'].values.reshape(-1, 1)
-y = categories_df['tot_no_entities'].values.reshape(-1, 1)
-linear_regressor = LinearRegression().fit(x, y)
-y_pred = linear_regressor.predict(x)
-print(linear_regressor.coef_)
-plt.scatter(x, y)
-plt.plot(x, y_pred, color='red')
+linear_regression(categories_df['no_unique_entities'], categories_df['tot_no_entities'])
 hist = categories_df.hist(bins=70)
 plt.show()
 
+
+# TODO: Max tjänst för att jämföra artiklar alternativt embeddings för att jämföra kategorier
