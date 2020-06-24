@@ -68,7 +68,6 @@ def link_entities_to_categories(articles, entities):
     return categories
 
 
-
 articles = read_df_from_file('data/articles_df.jsonl')
 unam_entities = read_df_from_file('data/unambiguous_entities_df.jsonl')
 merged_entities = read_df_from_file('data/merged_entities_df.jsonl')

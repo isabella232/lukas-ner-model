@@ -79,7 +79,7 @@ def format_entities(raw_entities):
     
 
 nlp = pipeline('ner', model='KB/bert-base-swedish-cased-ner', tokenizer='KB/bert-base-swedish-cased-ner')
-articles = get_articles('data/small.json')
+articles = get_articles('data/articles.json')
 
 article_cnt = 0
 json_output = []
@@ -100,24 +100,24 @@ for i, article in enumerate(articles):
         except IndexError:  # 1541 max length sentence
             failed_articles += [article]
             continue
-    for entity in article_entities:
-        print(entity)
+    # for entity in article_entities:
+    #     print(entity)
     formatted_entities = format_entities(article_entities)
     json_output += [{'article': article, 'entities': formatted_entities}]
-    #print(i)
-    print('-' * 100)
+    print(i)
+    #print('-' * 100)
     for entity in formatted_entities:
-        print(entity)
+        #print(entity)
         # if isinstance(entity['entity'], list): print('mixed:', entity)
         for score in entity['score']:
             if score > 1:
                 print('failed:', entity)
                 exit()
 
-# with jsonlines.open('data/results.jsonl', mode='w') as writer:
-#     for article in json_output:
-#         writer.write(article)
+with jsonlines.open('data/results.jsonl', mode='w') as writer:
+    for article in json_output:
+        writer.write(article)
 
-# with jsonlines.open('data/failed.jsonl', mode='w') as writer:
-#     for article in failed_articles:
-#         writer.write(article)
+with jsonlines.open('data/failed.jsonl', mode='w') as writer:
+    for article in failed_articles:
+        writer.write(article)
