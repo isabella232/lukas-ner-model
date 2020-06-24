@@ -35,20 +35,17 @@ def link_entities_to_categories(articles, entities):
     categories = pd.DataFrame(categories_list)
     categories = categories.groupby('category')['article_id'].apply(list).reset_index(name='article_ids')
     categories['no_uses'] = categories['article_ids'].str.len()
-    #categories_df = categories_df.sort_values(by='no_uses', ascending=False)
 
     new_column = []
     for i in categories.index:
         ents = []
         cnt = []
         for article_id in categories['article_ids'][i]:
-            filtered = entities[entities['article_id'] == article_id]
+            filtered = entities[entities['article_ids'].apply(lambda x: article_id in x)]
             for j in filtered.index:
-                if filtered['word'][j] in ents:
-                    cnt[ents.index(filtered['word'][j])] += 1
-                else:
-                    ents += [filtered['word'][j]]
-                    cnt += [1]
+                ents += [filtered['word'][j]]
+                cnt += [filtered['article_ids'][j].count(article_id)]
+  
         new_column += [sorted(zip(cnt, ents), reverse=True)]
 
     categories['entities'] = new_column
@@ -95,11 +92,9 @@ per_article = pd.DataFrame(per_article_list).sort_values(by=['no_entities'], asc
 # linear_regression(per_article['no_entities'], per_article['article_len'])
 # plt.show()
 
-categories = link_entities_to_categories(articles, unam_entities)
-print('done')
+# Category-wise analysis
+categories = link_entities_to_categories(articles, merged_entities)
+print(categories.sort_values(by='no_uses', ascending=False))
 linear_regression(categories['no_unique_entities'], categories['tot_no_entities'])
 hist = categories.hist(bins=70)
-plt.show()
-
-
-# TODO: Max tjänst för att jämföra artiklar alternativt embeddings för att jämföra kategorier
+#plt.show()
