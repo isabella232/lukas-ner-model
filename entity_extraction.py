@@ -13,7 +13,15 @@ def get_articles(articles_file):
     return articles_arr
 
 
+def handle_ambiguity(current, previous):
+    if not isinstance(previous['entity'], list): previous['entity'] = [previous['entity']]
+    previous['entity'] += [{'type': current['entity'], 'subtoken': current['word']}]
+
+
 def format_entities(raw_entities):
+    
+    is_char = lambda x: x in ['-', ',', '\'', '#', '\"']
+    
     formatted_entities = []
     no_subtokens = 1
     
@@ -28,31 +36,40 @@ def format_entities(raw_entities):
             adjacent = previous['index'] == current['index'] - 1
             same_entity = previous['entity'] == current['entity']
         
+        end_of_article = i + 1 >= len(raw_entities)
+        if not end_of_article:
+            subseq = raw_entities[i + 1]
+            end_of_sentence = subseq['index'] < current['index']
+
+            if current['word'] == ':' and subseq['word'] == 's':
+                subseq['word'] = '[UNK]'
+                no_subtokens = 1
+                continue
+
         if formatted_entities and current['word'].startswith('##'):
             if adjacent:
                 previous['index'] = current['index']
                 previous['word'] += current['word'][2:]
                 previous['score'][-1] += current['score']
                 no_subtokens += 1
-                if not same_entity:
-                    if not isinstance(previous['entity'], list): previous['entity'] = [previous['entity']]
-                    previous['entity'] += [{'type': current['entity'], 'subtoken': current['word']}]
+                if not same_entity: handle_ambiguity(current, previous)
             else:
                 current['entity'] = 'NA'
-        elif formatted_entities and adjacent and same_entity:
+        elif formatted_entities and adjacent:
             previous['index'] = current['index']
-            previous['word'] += ' ' + current['word']
+            if (is_char(current['word']) or is_char(previous['word'][-1])) and not current['word'] == 'och':
+                previous['word'] += current['word']
+            else:
+                previous['word'] += ' ' + current['word']
             previous['score'] += [current['score']]
             no_subtokens = 1
+            if not same_entity: handle_ambiguity(current, previous)
         else:
             current['score'] = [current['score']]
             formatted_entities += [current.copy()]
             no_subtokens = 1
 
-        end_of_article = i + 1 >= len(raw_entities)
         if not end_of_article:
-            subseq = raw_entities[i + 1]
-            end_of_sentence = subseq['index'] < current['index']
             end_of_entity_series = no_subtokens > 1 and not subseq['word'].startswith('##')
 
         if (end_of_article or end_of_sentence) or end_of_entity_series:
@@ -62,14 +79,14 @@ def format_entities(raw_entities):
     
 
 nlp = pipeline('ner', model='KB/bert-base-swedish-cased-ner', tokenizer='KB/bert-base-swedish-cased-ner')
-articles = get_articles('data/articles.json')
+articles = get_articles('data/small.json')
 
 article_cnt = 0
 json_output = []
 failed_articles = []
 
-for count, article in enumerate(articles):
-    sentences = article['content_text'].split('.')
+for i, article in enumerate(articles):
+    sentences = article['content_text'].replace('\n\n', '.').split('.')
     article_entities = []
     for sentence in sentences:
         if re.search('<.*>', sentence):
@@ -83,22 +100,24 @@ for count, article in enumerate(articles):
         except IndexError:  # 1541 max length sentence
             failed_articles += [article]
             continue
-
+    for entity in article_entities:
+        print(entity)
     formatted_entities = format_entities(article_entities)
     json_output += [{'article': article, 'entities': formatted_entities}]
-    print(count + 1)
-
+    #print(i)
+    print('-' * 100)
     for entity in formatted_entities:
+        print(entity)
         # if isinstance(entity['entity'], list): print('mixed:', entity)
         for score in entity['score']:
             if score > 1:
                 print('failed:', entity)
                 exit()
 
-with jsonlines.open('data/results.jsonl', mode='w') as writer:
-    for article in json_output:
-        writer.write(article)
+# with jsonlines.open('data/results.jsonl', mode='w') as writer:
+#     for article in json_output:
+#         writer.write(article)
 
-with jsonlines.open('data/failed.jsonl', mode='w') as writer:
-    for article in failed_articles:
-        writer.write(article)
+# with jsonlines.open('data/failed.jsonl', mode='w') as writer:
+#     for article in failed_articles:
+#         writer.write(article)
