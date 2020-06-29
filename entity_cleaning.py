@@ -1,12 +1,12 @@
 import pandas as pd
-import jsonlines
 import nltk
 from nltk.stem import SnowballStemmer
 import lemmy
+from help_functions import write_df_to_file
 
 
 def create_data_frames():
-    with jsonlines.open('data/results.jsonl') as reader:
+    with jsonlines.open('data/new_results.jsonl') as reader:
         articles_list = []
         entities_list = []
         for obj in reader:
@@ -19,7 +19,6 @@ def create_data_frames():
     articles_df = pd.DataFrame(articles_list)
     entities_df = pd.DataFrame(entities_list)
     entities_df = entities_df[entities_df['word'] != 's']
-    #entities_df['word'] = entities_df['word'].str.lower()
     ambiguous_df = entities_df[entities_df['entity'].apply(lambda x: type(x) == list)]
     entities_df = entities_df[entities_df['entity'].apply(lambda x: type(x) != list)]
     essentials_df = entities_df[entities_df['entity'].apply(lambda x: x in ['PER', 'ORG', 'LOC', 'EVN'])]
@@ -36,13 +35,13 @@ def merge_entities(df):
         i_w = df['word'][i]
         if len(i_w) < 3: continue
         #i_s = stemmer.stem(i_w)
-        i_l = lemmatizer.lemmatize('PROPN', i_w)
+        i_l = lemmatizer.lemmatize('PROPN', i_w)[0].lower()
         if i % 1000 == 0: print(i, i_w.lower()[0])
         for j in df.index[i+1:]:
             j_w = df['word'][j]
             if not i_w.lower()[0] == j_w.lower()[0]: break
             #j_s = stemmer.stem(j_w)
-            j_l = lemmatizer.lemmatize('PROPN', j_w)
+            j_l = lemmatizer.lemmatize('PROPN', j_w)[0].lower()
             if i_l == j_l or i_w == j_l[0]:
                 df.at[i, 'article_ids'] += df.at[j, 'article_ids']
                 #merges += [{'1st': i_w, '2nd': j_w}]
@@ -101,15 +100,8 @@ def initial_analysis(articles_df, entities_df, ambiguous_df, essentials_df):
     print('-' * 200)
 
 
-def write_df_to_file(df, path):
-    json_form = df.to_json(orient='records', lines=True, force_ascii=False)
-    f = open(path, 'w')
-    f.write(json_form)
-    f.close()
-
-
 dfs = create_data_frames()
-initial_analysis(dfs[0], dfs[1], dfs[2], dfs[3])
+#initial_analysis(dfs[0], dfs[1], dfs[2], dfs[3])
 
 unique_entities = pd.DataFrame(dfs[3].groupby('word')['article_id'].apply(list).reset_index(name='article_ids'))
 merged_entities = merge_entities(unique_entities.copy())

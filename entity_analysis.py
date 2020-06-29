@@ -1,16 +1,8 @@
 import pandas as pd
-import jsonlines
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-
-
-def read_df_from_file(path):
-    with jsonlines.open(path) as reader:
-            obj_list = []
-            for obj in reader:
-                obj_list += [obj]
-    return pd.DataFrame(obj_list)
+from help_functions import write_df_to_file, read_df_from_file
 
 
 def linear_regression(x_df, y_df):
@@ -97,3 +89,6 @@ print(categories.sort_values(by='no_uses', ascending=False))
 linear_regression(categories['no_unique_entities'], categories['tot_no_entities'])
 hist = categories.hist(bins=70)
 #plt.show()
+
+write_df_to_file(categories, 'data/categories_df.jsonl')
+

@@ -1,4 +1,4 @@
-from transformers import pipeline
+from transformers import pipeline, BertTokenizer
 import re
 import json
 import jsonlines
@@ -18,14 +18,15 @@ def handle_ambiguity(current, previous):
     previous['entity'] += [{'type': current['entity'], 'subtoken': current['word']}]
 
 
-def format_entities(raw_entities):
+def format_entities(raw_entities, text):
     
-    is_char = lambda x: x in ['-', ',', '\'', '#', '\"']
+    is_char = lambda x: x in ['-', ',', '\"', '\'', '’', '#']
     
     formatted_entities = []
     no_subtokens = 1
     
     for i, current in enumerate(raw_entities):
+        
         if '[UNK]' in current['word']: current['word'] = current['word'].replace('[UNK]', '').strip()
         if not current['word']:
             current['entity'] = 'NA'
@@ -45,7 +46,7 @@ def format_entities(raw_entities):
                 subseq['word'] = '[UNK]'
                 no_subtokens = 1
                 continue
-
+            
         if formatted_entities and current['word'].startswith('##'):
             if adjacent:
                 previous['index'] = current['index']
@@ -79,6 +80,7 @@ def format_entities(raw_entities):
     
 
 nlp = pipeline('ner', model='KB/bert-base-swedish-cased-ner', tokenizer='KB/bert-base-swedish-cased-ner')
+tokenizer = BertTokenizer.from_pretrained('KB/bert-base-swedish-cased-ner')
 articles = get_articles('data/articles.json')
 
 article_cnt = 0
@@ -86,7 +88,8 @@ json_output = []
 failed_articles = []
 
 for i, article in enumerate(articles):
-    sentences = article['content_text'].replace('\n\n', '.').split('.')
+    article_text = article['content_text']
+    sentences = article_text.replace('\n\n', '.').split('.')
     article_entities = []
     for sentence in sentences:
         if re.search('<.*>', sentence):
@@ -95,14 +98,15 @@ for i, article in enumerate(articles):
         elif not sentence.strip():
             continue
         try:
-            entities = nlp(sentence.strip() + '.')
+            input_sentence = sentence.strip() + '.'
+            entities = nlp(input_sentence)
             article_entities += entities
         except IndexError:  # 1541 max length sentence
             failed_articles += [article]
             continue
     # for entity in article_entities:
     #     print(entity)
-    formatted_entities = format_entities(article_entities)
+    formatted_entities = format_entities(article_entities, article_text)
     json_output += [{'article': article, 'entities': formatted_entities}]
     print(i)
     #print('-' * 100)
@@ -114,10 +118,10 @@ for i, article in enumerate(articles):
                 print('failed:', entity)
                 exit()
 
-with jsonlines.open('data/results.jsonl', mode='w') as writer:
+with jsonlines.open('data/new_results.jsonl', mode='w') as writer:
     for article in json_output:
         writer.write(article)
 
-with jsonlines.open('data/failed.jsonl', mode='w') as writer:
+with jsonlines.open('data/new_failed.jsonl', mode='w') as writer:
     for article in failed_articles:
         writer.write(article)
