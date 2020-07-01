@@ -59,7 +59,7 @@ def format_entities(raw_entities, text):
                     handle_ambiguity(current, previous)
             else:
                 current["entity"] = "NA"
-        elif formatted_entities and adjacent:
+        elif formatted_entities and adjacent and same_entity:
             previous["index"] = current["index"]
             if (
                 is_char(current["word"]) or is_char(previous["word"][-1])
@@ -69,8 +69,6 @@ def format_entities(raw_entities, text):
                 previous["word"] += " " + current["word"]
             previous["score"] += [current["score"]]
             no_subtokens = 1
-            if not same_entity:
-                handle_ambiguity(current, previous)
         else:
             current["score"] = [current["score"]]
             formatted_entities += [current.copy()]
@@ -96,11 +94,11 @@ nlp = pipeline(
 )
 articles = get_articles("data/articles.json")
 
-article_cnt = 0
 json_output = []
 failed_articles = []
 
 for i, article in enumerate(articles):
+    print("Processing article", i, "…")
     article_text = article["content_text"]
     sentences = article_text.replace("\n\n", ".").split(".")
     article_entities = []
@@ -121,7 +119,7 @@ for i, article in enumerate(articles):
     #     print(entity)
     formatted_entities = format_entities(article_entities, article_text)
     json_output += [{"article": article, "entities": formatted_entities}]
-    print(i)
+
     # print('-' * 100)
     for entity in formatted_entities:
         # print(entity)
