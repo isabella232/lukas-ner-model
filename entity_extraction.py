@@ -92,7 +92,7 @@ nlp = pipeline(
     model="KB/bert-base-swedish-cased-ner",
     tokenizer="KB/bert-base-swedish-cased-ner",
 )
-articles = get_articles("data/articles.json")
+articles = get_articles("data/articles_mittmedia.json")
 
 json_output = []
 failed_articles = []
