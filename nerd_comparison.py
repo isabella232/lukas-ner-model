@@ -1,7 +1,7 @@
 import jsonlines
 import pandas as pd
 from string import punctuation
-from help_functions import read_df_from_file
+from file_handling import read_df_from_file
 
 
 def create_df_from_results(path):
@@ -31,8 +31,6 @@ def clean_entities(df):
         if reg_chars:
             clean = False
             while not clean:
-                # if '"Rickard' in word:
-                #     print(word)
                 if word[:1] in chars:
                     word = word[1:].strip()
                 elif word[-1:] in chars:
@@ -55,11 +53,11 @@ def clean_entities(df):
 
 
 def create_entities_df():
-    bert_df = create_df_from_results("data/results.jsonl")
+    bert_df = create_df_from_results("data/output/results.jsonl")
     bert_df = bert_df[
         bert_df["entity"].apply(lambda x: x in ["PER", "ORG", "LOC"])
     ].reset_index(drop=True)
-    nerd_df = create_df_from_results("data/results_nerd.jsonl")
+    nerd_df = create_df_from_results("data/output/results_nerd.jsonl")
 
     nerd_df = clean_entities(nerd_df)
     nerd_df = nerd_df.drop(["count"], axis=1)
@@ -82,7 +80,7 @@ def compare_unique_entities(nerd_df, bert_df):
 
 
 def extract_mentioned_tags():
-    articles_df = read_df_from_file("data/articles_df.jsonl")
+    articles_df = read_df_from_file("data/dataframes/articles_df.jsonl")
 
     tags_dict = []
     for ind in articles_df.index:
@@ -118,17 +116,18 @@ def evaluate_against_tags(entities, tags):
             all_tags += [tag]
             if tag in found:
                 found_tags += [tag]
-            else:
-                for t in found:
-                    words = t.split()
-                    if len(words) > 2:
-                        combinations = []
-                        i = 0
-                        while i < len(words) - 1:
-                            combinations += [words[i] + " " + words[i + 1]]
-                            i += 1
-                        if tag in combinations:
-                            found_tags += [tag]
+            # For when BERT entities were merged too much
+            # else:
+            #     for t in found:
+            #         words = t.split()
+            #         if len(words) > 2:
+            #             combinations = []
+            #             i = 0
+            #             while i < len(words) - 1:
+            #                 combinations += [words[i] + " " + words[i + 1]]
+            #                 i += 1
+            #             if tag in combinations:
+            #                 found_tags += [tag]
 
     return all_tags, found_tags
 
@@ -157,8 +156,10 @@ print("NERD score:", nerd_score, "| BERT score:", bert_score)
 
 nerd_bert_diff = [x for x in nerd_found if x not in bert_found]
 print(len(nerd_bert_diff))
-# = 124 with filtered BERT, = 48 with unfiltered BERT (minus at least 11)
-
+# = 108 with filtered BERT, = 41 with unfiltered BERT (minus at least 9)
+for entity in nerd_bert_diff:
+    print(entity)
+print("-" * 50)
 diff = [x for x in all_tags if x not in bert_found]
 for entity in diff:
     print(entity)
