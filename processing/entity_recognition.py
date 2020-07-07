@@ -2,14 +2,21 @@ from transformers import pipeline
 import re
 import json
 import jsonlines
-from file_handling import write_output_to_file
+
+from utils.file_handling import write_output_to_file
+import time
 
 
-def get_articles(articles_file):
-    with open(articles_file, "r") as f:
+def get_articles(path):
+    with open(path, "r") as f:
         articles = json.load(f)
 
     return [article for article in articles]
+
+    # with jsonlines.open(path) as reader:
+    #     obj_list = [obj for obj in reader]
+
+    # return obj_list
 
 
 def handle_ambiguity(current, previous):
@@ -106,7 +113,7 @@ model = "KB/bert-base-swedish-cased-ner"
 tokenizer = "KB/bert-base-swedish-cased-ner"
 nlp = pipeline("ner", model=model, tokenizer=tokenizer)
 
-articles = get_articles("data/input/articles.json")
+articles = get_articles("data/input/articles_small.json")
 
 json_output = []
 omitted_articles = []
@@ -138,6 +145,5 @@ for i, article in enumerate(articles):
 
     validate_scores(formatted_entities)
 
-
-write_output_to_file(json_output, "data/output/new_results.jsonl")
-write_output_to_file(omitted_articles, "data/output/new_omitted.jsonl")
+# write_output_to_file(json_output, "data/output/results_10k.jsonl")
+# write_output_to_file(omitted_articles, "data/output/omitted_10k.jsonl")

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-from file_handling import write_df_to_file, read_df_from_file
+from utils.file_handling import write_df_to_file, read_df_from_file
 
 
 def linear_regression(x_df, y_df):
@@ -23,14 +23,19 @@ def linear_regression(x_df, y_df):
 def link_entities_to_categories(articles, entities):
 
     categories_list = []
+
     for i in articles.index:
         is_mittmedia = articles["brand"][i] == "MITTMEDIA"
+
         for tag in articles["tags"][i]:
             mittmedia_categories = is_mittmedia and tag["category"].startswith("RYF-")
-            if not is_mittmedia or mittmedia_categories:
+            is_placemark = tag["category"] == "PLACEMARK"
+
+            if (not is_mittmedia and not is_placemark) or mittmedia_categories:
                 categories_list += [
                     {"category": tag["name"], "article_id": articles["id"][i]}
                 ]
+
     categories = pd.DataFrame(categories_list)
     categories = (
         categories.groupby("category")["article_id"]
@@ -40,16 +45,20 @@ def link_entities_to_categories(articles, entities):
     categories["no_uses"] = categories["article_ids"].str.len()
 
     new_column = []
+
     for i in categories.index:
         ents = []
         cnts = []
+
         for article_id in categories["article_ids"][i]:
             filtered = entities[
                 entities["article_ids"].apply(lambda x: article_id in x)
             ]
+
             for j in filtered.index:
                 ent = filtered["word"][j]
                 cnt = filtered["article_ids"][j].count(article_id)
+
                 if ent in ents:
                     cnts[ents.index(ent)] += cnt
                 else:
@@ -69,19 +78,22 @@ def link_entities_to_categories(articles, entities):
     #         if entity[0] > 10: print(entity)
 
     tot_no = []
+
     for i in categories.index:
         tot_no += [0]
+
         for entity in categories["entities"][i]:
             if entity:
                 tot_no[-1] += entity[0]
 
     categories["tot_no_entities"] = tot_no
+
     return categories
 
 
-articles = read_df_from_file("data/dataframes/articles_df.jsonl")
-unam_entities = read_df_from_file("data/dataframes/unambiguous_entities_df.jsonl")
-merged_entities = read_df_from_file("data/dataframes/merged_entities_df.jsonl")
+articles = read_df_from_file("data/dataframes/articles_10k_df.jsonl")
+unam_entities = read_df_from_file("data/dataframes/unambiguous_entities_10k_df.jsonl")
+merged_entities = read_df_from_file("data/dataframes/merged_entities_10k_df.jsonl")
 
 
 # Visualize how many entities occur x number of times
@@ -109,15 +121,17 @@ f1.show()
 
 
 # Category-wise analysis
+print("Analyzing categories…")
 categories = link_entities_to_categories(articles, merged_entities)
-
+# categories = read_df_from_file("data/dataframes/categories_10k_df.jsonl")
+print("Done analyzing!")
 f2 = plt.figure(2)
 linear_regression(categories["no_unique_entities"], categories["tot_no_entities"])
 f2.show()
 
 count.plot(x="no_occurrences", y="no_entities")
 categories.hist(bins=70)
-plt.show()
+# plt.show()
 
 
-# write_df_to_file(categories, "data/dataframes/categories_df.jsonl")
+# write_df_to_file(categories, "data/dataframes/categories_10k_df.jsonl")

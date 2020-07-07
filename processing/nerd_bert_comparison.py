@@ -1,18 +1,7 @@
 import jsonlines
 import pandas as pd
 from string import punctuation
-from file_handling import read_df_from_file
-
-
-def create_df_from_results(path):
-    with jsonlines.open(path) as reader:
-        entities_list = []
-        for obj in reader:
-            article_id = obj["article"]["id"]
-            for entity in obj["entities"]:
-                entities_list += [entity]
-                entities_list[-1]["article_id"] = article_id
-    return pd.DataFrame(entities_list)
+from utils.file_handling import create_dfs_from_file, read_df_from_file
 
 
 def clean_entities(df):
@@ -53,11 +42,11 @@ def clean_entities(df):
 
 
 def create_entities_df():
-    bert_df = create_df_from_results("data/output/results.jsonl")
-    bert_df = bert_df[
-        bert_df["entity"].apply(lambda x: x in ["PER", "ORG", "LOC"])
-    ].reset_index(drop=True)
-    nerd_df = create_df_from_results("data/output/results_nerd.jsonl")
+    bert_df = create_dfs_from_file("data/output/results_10k.jsonl", False)[1]
+    # bert_df = bert_df[
+    #     bert_df["entity"].apply(lambda x: x in ["PER", "ORG", "LOC"])
+    # ].reset_index(drop=True)
+    nerd_df = create_dfs_from_file("data/output/results_nerd_10k.jsonl", False)[1]
 
     nerd_df = clean_entities(nerd_df)
     nerd_df = nerd_df.drop(["count"], axis=1)
@@ -80,7 +69,7 @@ def compare_unique_entities(nerd_df, bert_df):
 
 
 def extract_mentioned_tags():
-    articles_df = read_df_from_file("data/dataframes/articles_df.jsonl")
+    articles_df = read_df_from_file("data/dataframes/articles_10k_df.jsonl")
 
     tags_dict = []
     for ind in articles_df.index:
@@ -152,14 +141,14 @@ bert_found = bert_results[1]
 bert_score = len(bert_found) / len(all_tags)
 
 
-print("NERD score:", nerd_score, "| BERT score:", bert_score)
+print(f"NERD score: {len(nerd_found)} / {len(all_tags)} = {nerd_score}")
+print(f"BERT score: {len(bert_found)} / {len(all_tags)} = {bert_score}")
 
 nerd_bert_diff = [x for x in nerd_found if x not in bert_found]
 print(len(nerd_bert_diff))
 # = 108 with filtered BERT, = 41 with unfiltered BERT (minus at least 9)
-for entity in nerd_bert_diff:
-    print(entity)
-print("-" * 50)
-diff = [x for x in all_tags if x not in bert_found]
-for entity in diff:
-    print(entity)
+[print(entity for entity in nerd_bert_diff)]
+# print("-" * 50)
+# diff = [x for x in all_tags if x not in bert_found]
+# for entity in diff:
+#     print(entity)

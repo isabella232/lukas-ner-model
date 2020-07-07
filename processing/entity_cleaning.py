@@ -1,24 +1,14 @@
 import pandas as pd
 import jsonlines
 import lemmy
-from file_handling import write_df_to_file
+from utils.file_handling import create_dfs_from_file, write_df_to_file
 
 
 def create_data_frames():
-    with jsonlines.open("data/output/results.jsonl") as reader:
-        articles_list = []
-        entities_list = []
+    dfs = create_dfs_from_file("data/output/results_10k.jsonl", True)
 
-        for obj in reader:
-            articles_list += [obj["article"]]
-            article_id = obj["article"]["id"]
-
-            for entity in obj["entities"]:
-                entities_list += [entity]
-                entities_list[-1]["article_id"] = article_id
-
-    articles = pd.DataFrame(articles_list)
-    entities = pd.DataFrame(entities_list)
+    articles = dfs[0]
+    entities = dfs[1]
 
     entities = entities[entities["word"] != "s"]
     ambiguous = entities[entities["entity"].apply(lambda x: type(x) == list)]
@@ -61,7 +51,7 @@ def initial_analysis(articles, entities, ambiguous, essentials):
 
     amb_score = calculate_average_score(ambiguous)
     amb_no = amb_len / art_len
-    amb_share = amb_len / amb_len + ent_len
+    amb_share = amb_len / (amb_len + ent_len)
 
     ess_score = calculate_average_score(essentials)
     ess_no = ess_len / art_len
@@ -75,7 +65,7 @@ def initial_analysis(articles, entities, ambiguous, essentials):
         f"Ambiguous:\taverage score = {amb_score} | average number of entities per article = {amb_no} | share = {amb_share}"
     )
     print(
-        f"Ambiguous:\taverage score = {ess_score} | average number of entities per article = {ess_no} | share = {ess_share}"
+        f"Essential:\taverage score = {ess_score} | average number of entities per article = {ess_no} | share = {ess_share}"
     )
     print(divider)
 
@@ -118,7 +108,7 @@ def merge_entities(df):
 
 
 dfs = create_data_frames()
-# initial_analysis(dfs[0], dfs[1], dfs[2], dfs[3])
+initial_analysis(dfs[0], dfs[1], dfs[2], dfs[3])
 
 df = dfs[3].groupby("word")["article_id"].apply(list).reset_index(name="article_ids")
 unique_entities = pd.DataFrame(df)
@@ -129,6 +119,6 @@ merged_entities["no_occurrences"] = merged_entities["article_ids"].str.len()
 merged_entities = merged_entities.sort_values(by=["no_occurrences"], ascending=False)
 print("Merged!")
 
-write_df_to_file(dfs[0], "data/dataframes/articles.jsonl")
-write_df_to_file(dfs[1], "data/dataframes/unambiguous_entities_df.jsonl")
-write_df_to_file(merged_entities, "data/dataframes/merged_entities_df.jsonl")
+write_df_to_file(dfs[0], "data/dataframes/articles_10k.jsonl")
+write_df_to_file(dfs[1], "data/dataframes/unambiguous_entities_10k_df.jsonl")
+write_df_to_file(merged_entities, "data/dataframes/merged_entities_10k_df.jsonl")
