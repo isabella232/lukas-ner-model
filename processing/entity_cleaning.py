@@ -107,10 +107,12 @@ def merge_entities(df):
     return deduplicated
 
 
-dfs = create_data_frames()
-initial_analysis(dfs[0], dfs[1], dfs[2], dfs[3])
+articles, entities, ambiguous, essentials = create_data_frames()
+initial_analysis(articles, entities, ambiguous, essentials)
 
-df = dfs[3].groupby("word")["article_id"].apply(list).reset_index(name="article_ids")
+df = (
+    essentials.groupby("word")["article_id"].apply(list).reset_index(name="article_ids")
+)
 unique_entities = pd.DataFrame(df)
 
 print("Merging entities…")
@@ -119,6 +121,6 @@ merged_entities["no_occurrences"] = merged_entities["article_ids"].str.len()
 merged_entities = merged_entities.sort_values(by=["no_occurrences"], ascending=False)
 print("Merged!")
 
-write_df_to_file(dfs[0], "data/dataframes/articles_10k.jsonl")
-write_df_to_file(dfs[1], "data/dataframes/unambiguous_entities_10k_df.jsonl")
+write_df_to_file(articles, "data/dataframes/articles_10k.jsonl")
+write_df_to_file(entities, "data/dataframes/unambiguous_entities_10k_df.jsonl")
 write_df_to_file(merged_entities, "data/dataframes/merged_entities_10k_df.jsonl")

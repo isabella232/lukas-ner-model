@@ -1,6 +1,9 @@
-# Swedish Burt NER model evaluation
-This repo will be populated with work investigated on the BURT NER model and the improvements that needs to be made to make it more compatible with news articles.
+# Evaluation of KB-BERT for Swedish NER
+This repository will be populated with work aiming to investigate the Swedish BERT model (KB-BERT), specifically its performance at named entity recognition (NER) for news articles and possible improvements to enhance it in the domain. The exact model evaluated is **bert-base-swedish-cased-ner**.
 
-* bert_ner_example.py is a example of how to use the swedish bert model
-* dataset_data_information_extraction.py prints information about the dataset (TODO: needs to be completed with more information)
-* requirements.txt - Contains all pip packages needed to run the above files. install them by running `pip install -r requirements.txt` in your local pip environment
+
+* The original paper on KB-BERT can be found [here](https://arxiv.org/pdf/2007.01658.pdf).
+* The KB-BERT models kan be found [here](https://github.com/Kungbib/swedish-bert-models).
+
+## Files
+* requirements.txt – Contains all pip packages needed to run the above files. Install them by running `pip install -r requirements.txt` in your local pip environment.
