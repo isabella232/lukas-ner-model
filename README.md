@@ -1,7 +1,6 @@
 # Evaluation of KB-BERT for Swedish NER
 <img align="right" width="200" height="300" src="bert.png">
-This repository will be populated with work aiming to investigate the Swedish BERT model (KB-BERT), specifically its performance at named entity recognition (NER) for news articles and possible improvements to enhance it in the domain. The exact model evaluated is **bert-base-swedish-cased-ner**.
-
+This repository will be populated with work aiming to investigate the Swedish BERT model (KB-BERT), specifically its performance at named entity recognition (NER) for news articles and possible improvements to enhance it in the domain. The exact model evaluated is <b>bert-base-swedish-cased-ner</b>.
 
 * The original paper on KB-BERT can be found [here](https://arxiv.org/pdf/2007.01658.pdf).
 * The KB-BERT models kan be found [here](https://github.com/Kungbib/swedish-bert-models).
