@@ -3,20 +3,20 @@ import pickle
 import math
 import time
 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 from transformers import BertModel, BertTokenizer
 import torch
 from torch import nn
 from scipy.spatial.distance import cosine
-import numpy as np
-import pandas as pd
 from wmd import WMD
 import nltk
 from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
-import matplotlib.pyplot as plt
 
-from utils.parse_articles import get_articles
-from utils.file_handling import write_df_to_file, read_df_from_file
+from .utils.parse_articles import get_articles
+from .utils.file_handling import write_df_to_file, read_df_from_file
 
 
 def create_embedding(sentence):

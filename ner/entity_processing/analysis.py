@@ -1,8 +1,9 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-from utils.file_handling import write_df_to_file, read_df_from_file
+
+from ..utils.file_handling import write_df_to_file, read_df_from_file
 
 
 def linear_regression(x_df, y_df):

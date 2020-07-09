@@ -1,7 +1,8 @@
-import pandas as pd
 import jsonlines
 import lemmy
-from utils.file_handling import create_dfs_from_file, write_df_to_file
+import pandas as pd
+
+from ..utils.file_handling import create_dfs_from_file, write_df_to_file
 
 
 def create_data_frames():

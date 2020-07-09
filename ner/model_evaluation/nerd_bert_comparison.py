@@ -1,7 +1,9 @@
+from string import punctuation
+
 import jsonlines
 import pandas as pd
-from string import punctuation
-from utils.file_handling import create_dfs_from_file, read_df_from_file
+
+from ..utils.file_handling import create_dfs_from_file, read_df_from_file
 
 
 def clean_entities(df):

@@ -1,10 +1,11 @@
-from transformers import pipeline
+import time
 import re
 import json
-import jsonlines
 
-from utils.file_handling import write_output_to_file
-import time
+import jsonlines
+from transformers import pipeline
+
+from ..utils.file_handling import write_output_to_file
 
 
 def get_articles(path):
