@@ -2,32 +2,24 @@ from string import punctuation
 
 from transformers import pipeline
 
+from .evaluator import Evaluator
 from ..utils.file_handling import write_output_to_file
-from evaluation import (
-    load_corpus,
-    format_sentences,
-    format_tags,
-    filter_tags,
-    prepare_for_evaluation,
-)
 
 print("Preprocessing…")
 model = "KB/bert-base-swedish-cased-ner"
 tokenizer = "KB/bert-base-swedish-cased-ner"
 nlp = pipeline("ner", model=model, tokenizer=tokenizer)
 
-corpus = load_corpus()
-all_sentences = format_sentences(corpus[0])
-all_tags = format_tags(corpus[1])
+evaluator = Evaluator(False)
 
-sentences, tags = prepare_for_evaluation(all_sentences, all_tags, False)
+all_sentences, all_tags = evaluator.load_corpus()
+sentences, tags = evaluator.prepare_for_evaluation(all_sentences, all_tags, 1.0)
 
 print("Extracting entities…")
 entities = [nlp(sentence) for sentence in sentences]
 
 punct = set(punctuation)
-desired = ["PER", "ORG", "LOC"]
-all_types = desired + ["TME", "MSR", "WRK", "EVN", "OBJ"]
+all_types = evaluator.desired + ["TME", "MSR", "WRK", "EVN", "OBJ"]
 formatted = []
 
 print("Formatting entities…")
@@ -38,7 +30,7 @@ for ents in entities:
             print(token["entity"], token["word"])
 
         faulty_token = token["word"] == "[CLS]" or token["word"] == "[UNK]"
-        if faulty_token or token["entity"] not in desired:
+        if faulty_token or token["entity"] not in evaluator.desired:
             continue
 
         if token["word"].startswith("##"):
@@ -68,9 +60,16 @@ for ents in entities:
 
 write_output_to_file(formatted, "data/output/bert_evaluation_v2.jsonl")
 
+entities = evaluator.get_results("data/output/bert_evaluation_v2.jsonl")
+per, org, loc = evaluator.evaluate(entities, tags)
+
+per_metrics = evaluator.calculate_metrics(per, "PER")
+org_metrics = evaluator.calculate_metrics(org, "ORG")
+loc_metrics = evaluator.calculate_metrics(loc, "LOC")
+
+
 # test_sentence = 'Den är tre timmar lång och släpps ut samtidigt med boken , " In the Arena " , i april .'
 # test_sentence = "( TT )"
 # results = nlp(test_sentence)
-
 # [print(entity) for entity in results]
 
