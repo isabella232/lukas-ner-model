@@ -11,7 +11,7 @@ def calculate_scores(entities):
     f1s = []
     no_sels = []
 
-    for min_thresh in range(0, 995, 1):
+    for min_thresh in range(0, 1000, 1):
 
         thresh = min_thresh / 1000
         print(thresh)
@@ -60,43 +60,57 @@ def threshold_evaluation(scores):
     return max_f1, max_f1_2d[0], inter
 
 
+def plot_thresholds(scores):
+    max_f1, max_f1_2d, inter = threshold_evaluation(scores)
+
+    f1 = plt.figure(1)
+
+    plt.plot(*zip(*scores[3]), label="Number of Entities")
+    plt.title(
+        "Effect of Threshold for Minimum Entity\nConfidence on the Number of Entities"
+    )
+    plt.xlabel("Threshold")
+    plt.ylabel("Number of Entities")
+
+    f1.show()
+
+    f2 = plt.figure(2)
+
+    plt.plot(*zip(*scores[0]), label="Precision")
+    plt.plot(*zip(*scores[1]), label="Recall")
+    plt.plot(*zip(*scores[2]), label="F1")
+
+    plt.axvline(max_f1, c="grey", ls="--")
+    plt.text(max_f1 - 0.03, 0.5, f"thresh = {'{0:.4g}'.format(max_f1)}", rotation=90)
+    plt.axvline(max_f1_2d, c="grey", ls="--")
+    plt.text(
+        max_f1_2d - 0.03, 0.5, f"thresh = {'{0:.4g}'.format(max_f1_2d)}", rotation=90
+    )
+
+    if inter:
+        plt.axvline(inter[0], c="grey", ls="--")
+        plt.text(
+            inter[0] - 0.03, 0.5, f"thresh = {'{0:.4g}'.format(inter[0])}", rotation=90
+        )
+
+    plt.title(
+        "Effect of Threshold for Minimum Entity\nConfidence on Precision, Recall & F1 Score"
+    )
+    plt.xlabel("Threshold")
+    plt.ylabel("Score")
+    plt.legend(bbox_to_anchor=(0.1, 0.3), loc="upper left")
+
+    f2.show()
+
+    plt.show()
+
+
 evaluator = Evaluator(False)
 
 all_sentences, all_tags = evaluator.load_corpus()
 sentences, tags = evaluator.prepare_for_evaluation(all_sentences, all_tags, 1.0)
 
-# nerd_entities = evaluator.get_results("data/output/nerd_evaluation_v2.jsonl")
-# nerd_scores = calculate_scores(nerd_entities)
-
-bert_entities = evaluator.get_results("data/output/bert_evaluation_v2.jsonl")
-bert_scores = calculate_scores(bert_entities)
-max_f1, max_f1_2d, inter = threshold_evaluation(bert_scores)
-print(max_f1, max_f1_2d, inter)
-
-# plt.plot(*zip(*nerd_scores), label="NERD")
-# plt.plot(*zip(*bert_scores), label="BERT")
-
-plt.plot(*zip(*bert_scores[3]), label="Number of Entities")
-# plt.plot(*zip(*bert_scores[0]), label="Precision")
-# plt.plot(*zip(*bert_scores[1]), label="Recall")
-# plt.plot(*zip(*bert_scores[2]), label="F1")
-
-plt.axvline(max_f1, c="grey", ls="--")
-plt.text(max_f1 - 0.03, 6400, f"thresh = {'{0:.4g}'.format(max_f1)}", rotation=90)
-plt.axvline(max_f1_2d, c="grey", ls="--")
-plt.text(max_f1_2d - 0.03, 6400, f"thresh = {'{0:.4g}'.format(max_f1_2d)}", rotation=90)
-
-if inter:
-    plt.axvline(inter[0], c="grey", ls="--")
-    plt.text(
-        inter[0] - 0.03, 6400, f"thresh = {'{0:.4g}'.format(inter[0])}", rotation=90
-    )
-
-plt.title(
-    "Effect of Threshold for Minimum Entity\nConfidence on the Number of Entities"
-)
-plt.xlabel("Threshold")
-plt.ylabel("Number of Entities")
-# plt.legend(bbox_to_anchor=(0.1, 0.3), loc="upper left")
-plt.show()
+entities = evaluator.get_results("data/output/bert_evaluation_v2.jsonl")
+scores = calculate_scores(entities)
+plot_thresholds(scores)
 

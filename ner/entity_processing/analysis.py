@@ -20,7 +20,6 @@ def linear_regression(x_df, y_df):
     return s, p
 
 
-# TODO: Refactor function
 def link_entities_to_categories(articles, entities):
 
     categories_list = []
@@ -45,20 +44,18 @@ def link_entities_to_categories(articles, entities):
     )
     categories["no_uses"] = categories["article_ids"].str.len()
 
-    new_column = []
+    entity_column = []
 
     for i in categories.index:
         ents = []
         cnts = []
 
-        for article_id in categories["article_ids"][i]:
-            filtered = entities[
-                entities["article_ids"].apply(lambda x: article_id in x)
-            ]
+        for aid in categories["article_ids"][i]:
+            filtered = entities[entities["article_ids"].apply(lambda x: aid in x)]
 
             for j in filtered.index:
                 ent = filtered["word"][j]
-                cnt = filtered["article_ids"][j].count(article_id)
+                cnt = filtered["article_ids"][j].count(aid)
 
                 if ent in ents:
                     cnts[ents.index(ent)] += cnt
@@ -66,9 +63,9 @@ def link_entities_to_categories(articles, entities):
                     ents += [ent]
                     cnts += [cnt]
 
-        new_column += [sorted(zip(cnts, ents), reverse=True)]
+        entity_column += [sorted(zip(cnts, ents), reverse=True)]
 
-    categories["entities"] = new_column
+    categories["entities"] = entity_column
     categories["no_unique_entities"] = categories["entities"].str.len()
 
     # most_frequent = categories_df.head(5)
@@ -78,16 +75,16 @@ def link_entities_to_categories(articles, entities):
     #     for entity in most_frequent['entities'][i]:
     #         if entity[0] > 10: print(entity)
 
-    tot_no = []
+    tot_no_column = []
 
     for i in categories.index:
-        tot_no += [0]
+        tot_no_column += [0]
 
         for entity in categories["entities"][i]:
             if entity:
-                tot_no[-1] += entity[0]
+                tot_no_column[-1] += entity[0]
 
-    categories["tot_no_entities"] = tot_no
+    categories["tot_no_entities"] = tot_no_column
 
     return categories
 

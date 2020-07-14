@@ -5,9 +5,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image
-from wordcloud import WordCloud, STOPWORDS, ImageColorGenerator
+from wordcloud import WordCloud, ImageColorGenerator
 
 from ..utils.file_handling import read_df_from_file
+
 
 entities = read_df_from_file("data/dataframes/merged_entities_10k_df.jsonl")
 
