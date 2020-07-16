@@ -121,7 +121,6 @@ f1.show()
 # Category-wise analysis
 print("Analyzing categories…")
 categories = link_entities_to_categories(articles, merged_entities)
-# categories = read_df_from_file("data/dataframes/categories_10k_df.jsonl")
 print("Done analyzing!")
 f2 = plt.figure(2)
 linear_regression(categories["no_unique_entities"], categories["tot_no_entities"])

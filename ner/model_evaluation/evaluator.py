@@ -72,7 +72,7 @@ class Evaluator:
             no_sentences = len(sentences)
             eval_size = int(no_sentences * sample_size)
             random.seed(1234567890)
-            eval_inds = random.sample(range(0, eval_size), eval_size)
+            eval_inds = random.sample(range(0, no_sentences - 1), eval_size)
 
             sentences = [sentences[i] for i in eval_inds]
             tags = [tags[i] for i in eval_inds]
@@ -105,7 +105,7 @@ class Evaluator:
             if w in g_w:
                 true_positives += [w]
                 del g_w[g_w.index(w)]
-        # print(relevant)
+
         d["tp"] += true_positives
         d["ap"] += all_positives
         d["rel"] += relevant
@@ -144,6 +144,6 @@ class Evaluator:
         recall = len(res["tp"]) / len(res["rel"])
         f1 = 2 * precision * recall / (precision + recall)
 
-        # print(f"{tag}: precision = {precision}, recall = {recall}, f1 = {f1}")
+        print(f"{tag}: precision = {precision}, recall = {recall}, f1 = {f1}")
 
         return precision, recall, f1

@@ -124,41 +124,57 @@ def BERT_article_similarity():
         print(sim)
 
 
+def create_sub_lookup(sub_lookup, first_char):
+    sub_lookup.sort(key=lambda x: x[0])
+    hashed, indexes = zip(*sub_lookup)
+
+    return [{"first": first_char, "hashed": hashed, "indexes": indexes}]
+
+
 def partition_into_lookup(embeddings):
     lookup = []
     sub_lookup = []
     first_char = embeddings[0]["entity"][0]
 
     for i, emb in enumerate(embeddings):
-        sub_lookup += [(hash(emb["entity"]), i)]
-        first = emb["entity"][0]
 
-        if not first_char == first or i == len(embeddings) - 1:
-            sub_lookup.sort(key=lambda x: x[0])
-            hashed, indexes = zip(*sub_lookup)
-            lookup += [{"first": first_char, "hashed": hashed, "indexes": indexes}]
+        first = emb["entity"][0]
+        last_iteration = i == len(embeddings) - 1
+
+        if not first_char == first:
+            lookup += create_sub_lookup(sub_lookup, first_char)
             sub_lookup = []
             first_char = first
+
+        sub_lookup += [(hash(emb["entity"]), i)]
+
+        if last_iteration:
+            lookup += create_sub_lookup(sub_lookup, first_char)
 
     return lookup
 
 
 def create_entity_embeddings(**kwargs):
     if len(kwargs) > 1:
+        any_common = lambda x: True if set(x) & kwargs["selected_aids"] else False
+
         entities_1 = read_df_from_file(kwargs["path_1"])
+        entities_1 = entities_1[entities_1["article_ids"].apply(any_common)]
         entities_2 = read_df_from_file(kwargs["path_2"])
-        all_entities = pd.concat([entities_1, entities_2])
-        all_entities = all_entities.groupby("word")["no_occurrences"].sum()
+
+        all_entities = pd.concat([entities_1, entities_2]).drop_duplicates(
+            subset=["word"], keep="first"
+        )
     else:
         all_entities = read_df_from_file(kwargs["path"])
 
-    all_entities = all_entities.index.get_level_values(0).tolist()
+    all_entities = all_entities["word"].tolist()
 
     print("Creating embeddings…")
     tot_len = len(all_entities)
     embeddings = []
     for i, entity in enumerate(all_entities):
-        print(f"{i}/{tot_len}")
+        print(f"{i+1}/{tot_len}")
         embeddings += [
             {
                 "entity": entity,
@@ -203,8 +219,12 @@ def binary_search(lookup, val):
 
 def retrieve_embedding(entity, lookup, embeddings):
     sub_lookup = [sub for sub in lookup if sub["first"] == entity[0]]
-    index = binary_search(sub_lookup[0], hash(entity))
-    embedding = embeddings[index]["embedding"]
+    try:
+        index = binary_search(sub_lookup[0], hash(entity))
+        embedding = embeddings[index]["embedding"]
+    except IndexError:
+        print(entity)
+        print(sub_lookup)
 
     return embedding
 
@@ -214,7 +234,8 @@ def rescale(vs):
     mn = min(vs)
     mx = max(vs)
     denominator = mx - mn
-    return [(v - mn) / denominator for v in vs]
+    #return [(v - mn) / denominator for v in vs]
+    return [scalre*v for v in]
 
 
 def filter_out_infrequent(df):
@@ -230,12 +251,10 @@ def calculate_entity_weight(df, i1, i2):
 
 
 def compare_categories(**kwargs):
-    start_time = time.time()
-
     print("Unpickling…")
-    with open("data/pickles/all_entity_embeddings.pickle", "rb") as f:
+    with open("data/pickles/new_entity_embeddings.pickle", "rb") as f:
         embeddings = pickle.load(f)
-    with open("data/pickles/all_entities_lookup.pickle", "rb") as f:
+    with open("data/pickles/new_entities_lookup.pickle", "rb") as f:
         lookup = pickle.load(f)
     print("Unpickled!")
 
@@ -256,6 +275,7 @@ def compare_categories(**kwargs):
     sim_matrix = np.zeros([no_categories, no_top_categories])
 
     for i1 in categories.index:
+
         if not categories["category"][i1] in selected:
             continue
 
@@ -296,11 +316,9 @@ def compare_categories(**kwargs):
     with open("data/pickles/new_similarity_matrix.pickle", "wb") as f:
         pickle.dump(sim_matrix, f)
 
-    print(f"--- {time.time() - start_time} seconds ---")
-
 
 def load_and_print_top_similarities(categories, top_categories, selected):
-    with open("data/pickles/category_similarity_matrix.pickle", "rb") as f:
+    with open("data/pickles/new_similarity_matrix.pickle", "rb") as f:
         sim_matrix = pickle.load(f)
 
     max_val = np.fliplr(np.sort(sim_matrix, axis=1)[:, -17:])
@@ -365,44 +383,51 @@ model = BertModel.from_pretrained("KB/bert-base-swedish-cased-ner")
 cos = nn.CosineSimilarity(dim=0)
 
 
-categories = read_df_from_file("data/dataframes/categories_df.jsonl")
+categories = read_df_from_file("data/dataframes/categories_10k_df.jsonl")
 top_categories = read_df_from_file("data/dataframes/top_categories_df.jsonl")
 selected = [
-    "Apple",
-    "Facebook",
-    "Greentech",
-    "Forskning",
-    "Teknik",
-    "Fintech",
-    "E-handel",
-    "Pandemi",
-    "Coronaviruset",
-    "Reklam",
-    "TV4",
-    "SVT",
-    "Fastighetsaffärer",
-    "Victoria Park Fastigheter",
-    "Klarna",
-    "Nordea",
-    "SEB",
-    "Miljöaktuellt",
-    "Spotify",
-    "EU",
-    "Eu",
+    "Musik",
+    # "Brottslighet",
+    # "Olyckor",
+    # "Näringsliv",
+    # "Skolsystemet",
+    # "Ekologi",
+    # "Sjukdomar & tillstånd",
+    # "Familjefrågor",
+    # "Anställningsförhållanden",
+    # "Mat & dryck",
+    # "Politiska frågor",
+    # "Religiösa byggnader",
+    # "Samhällsvetenskaper",
+    # "Infrastruktur",
+    # "Fotboll",
+    # "Oroligheter",
+    # "Väderfenomen",
 ]
+
+selected_aids = categories[categories["category"].apply(lambda x: x in selected)][
+    "article_ids"
+].tolist()
+selected_aids = set([aid for sublist in selected_aids for aid in sublist])
+
 
 # create_entity_embeddings(path="data/dataframes/merged_entities_10k_df.jsonl")
 # compare_categories(categories=categories)
 
-create_entity_embeddings(
-    path_1="data/dataframes/merged_entities_10k_df.jsonl",
-    path_2="data/dataframes/merged_entities_mittmedia_df.jsonl",
-)
-compare_categories(
-    categories=categories, top_categories=top_categories, selected=selected
-)
+# create_entity_embeddings(
+#     path_1="data/dataframes/merged_entities_10k_df.jsonl",
+#     path_2="data/dataframes/merged_entities_mittmedia_df.jsonl",
+#     selected_aids=selected_aids,
+# )
+# start_time = time.time()
+# compare_categories(
+#     categories=categories, top_categories=top_categories, selected=selected
+# )
+# print(f"--- {time.time() - start_time} seconds ---")
 
-
-# top_scores = load_and_print_top_similarities(categories, top_categories, selected)
+top_scores = load_and_print_top_similarities(categories, top_categories, selected)
 # top_ents = top_categories["no_uses"].values.tolist()
 # top_categories_plots(top_scores, top_ents)
+
+# TODO: Jämföra enskilda artiklar mot toppkategori
+
