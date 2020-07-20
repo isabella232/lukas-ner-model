@@ -230,12 +230,12 @@ def retrieve_embedding(entity, lookup, embeddings):
 
 
 def rescale(vs):
-    scaler = 1 / sum(vs)
     mn = min(vs)
     mx = max(vs)
     denominator = mx - mn
-    #return [(v - mn) / denominator for v in vs]
-    return [scalre*v for v in]
+    return [(v - mn) / denominator for v in vs]
+    # scaler = 1 / sum(vs)
+    # return [scaler * v for v in vs]
 
 
 def filter_out_infrequent(df):
@@ -275,7 +275,7 @@ def compare_categories(**kwargs):
     sim_matrix = np.zeros([no_categories, no_top_categories])
 
     for i1 in categories.index:
-
+        iter_time = time.time()
         if not categories["category"][i1] in selected:
             continue
 
@@ -312,13 +312,14 @@ def compare_categories(**kwargs):
             cat_sim[j1] = sum(ent_sim) / len(ent_sim) if ent_sim else 0
 
         sim_matrix[i1] = rescale(cat_sim)
+        print(f"--- Iteration {i1}: {(time.time() - iter_time)/60} min ---")
 
-    with open("data/pickles/new_similarity_matrix.pickle", "wb") as f:
+    with open("data/pickles/new3_similarity_matrix.pickle", "wb") as f:
         pickle.dump(sim_matrix, f)
 
 
 def load_and_print_top_similarities(categories, top_categories, selected):
-    with open("data/pickles/new_similarity_matrix.pickle", "rb") as f:
+    with open("data/pickles/new2_similarity_matrix.pickle", "rb") as f:
         sim_matrix = pickle.load(f)
 
     max_val = np.fliplr(np.sort(sim_matrix, axis=1)[:, -17:])
@@ -386,16 +387,16 @@ cos = nn.CosineSimilarity(dim=0)
 categories = read_df_from_file("data/dataframes/categories_10k_df.jsonl")
 top_categories = read_df_from_file("data/dataframes/top_categories_df.jsonl")
 selected = [
-    "Musik",
+    # "Musik",
     # "Brottslighet",
     # "Olyckor",
     # "Näringsliv",
     # "Skolsystemet",
-    # "Ekologi",
-    # "Sjukdomar & tillstånd",
-    # "Familjefrågor",
-    # "Anställningsförhållanden",
-    # "Mat & dryck",
+    "Ekologi",
+    "Sjukdomar & tillstånd",
+    "Familjefrågor",
+    "Anställningsförhållanden",
+    "Mat & dryck",
     # "Politiska frågor",
     # "Religiösa byggnader",
     # "Samhällsvetenskaper",
@@ -423,7 +424,7 @@ selected_aids = set([aid for sublist in selected_aids for aid in sublist])
 # compare_categories(
 #     categories=categories, top_categories=top_categories, selected=selected
 # )
-# print(f"--- {time.time() - start_time} seconds ---")
+# print(f"--- Total: {(time.time() - start_time)/60} min ---")
 
 top_scores = load_and_print_top_similarities(categories, top_categories, selected)
 # top_ents = top_categories["no_uses"].values.tolist()

@@ -7,15 +7,8 @@ from string import punctuation
 import jsonlines
 from transformers import pipeline
 
-from ..utils.file_handling import write_output_to_file
-
 
 def get_articles(path):
-    # with open(path, "r") as f:
-    #     articles = json.load(f)
-
-    # return [article for article in articles]
-
     with jsonlines.open(path) as reader:
         obj_list = [obj for obj in reader]
 
@@ -108,55 +101,57 @@ def format_entities(raw_entities, text):
 
 def validate_scores(entities):
     for entity in entities:
-        for score in entity["score"]:
-            if score > 1:
-                print("Score larger than 1.0 for:", entity)
-                exit()
+        if entity["score"] > 1.0:
+            print("Score larger than 1.0 for:", entity)
+            exit()
 
 
-model_name = "KB/bert-base-swedish-cased-ner"
-# Can now use grouped_entities=True to auto group tokens/words into entities
-nlp = pipeline("ner", model=model_name, tokenizer=model_name)
+def recognize_entities(articles):
+    model_name = "KB/bert-base-swedish-cased-ner"
+    # Can now use grouped_entities=True to auto group tokens/words into entities
+    nlp = pipeline("ner", model=model_name, tokenizer=model_name)
 
-articles = get_articles("data/input/articles_10k.json")
+    indexes = random.sample(range(0, len(articles) - 1), 10)
+    print(indexes)
+    articles = [article for i, article in enumerate(articles) if i in indexes]
+
+    json_output = []
+    omitted_articles = []
+
+    for i, article in enumerate(articles):
+        print("Processing article", i, "…")
+
+        text = article["content_text"]
+        sentences = text.replace("\n\n", ".").split(".")
+        entities = []
+
+        for sentence in sentences:
+            if re.search("<.*>", sentence):
+                omitted_articles += [article]
+                break
+            elif not sentence.strip():
+                continue
+
+            try:
+                input_sentence = sentence.strip() + "."
+                sentence_entities = nlp(input_sentence)
+                entities += sentence_entities
+            except IndexError:  # 1541 max length for input sentence
+                omitted_articles += [article]
+                continue
+        [print(entity) for entity in entities]
+        formatted_entities = format_entities(entities, text)
+        json_output += [{"article": article, "entities": formatted_entities}]
+
+    validate_scores(formatted_entities)
+
+    return json_output
 
 
-indexes = random.sample(range(0, len(articles) - 1), 10)
-print(indexes)
-# articles = [article for i, article in enumerate(articles) if i in indexes]
+if __name__ == "__main__":
+    articles = get_articles("data/input/articles_10k.json")
+    entities = recognize_entities(articles)
 
-json_output = []
-omitted_articles = []
-
-for i, article in enumerate(articles[9707:9709]):
-    print("Processing article", i, "…")
-
-    text = article["content_text"]
-    sentences = text.replace("\n\n", ".").split(".")
-    entities = []
-
-    for sentence in sentences:
-        if re.search("<.*>", sentence):
-            omitted_articles += [article]
-            break
-        elif not sentence.strip():
-            continue
-
-        try:
-            input_sentence = sentence.strip() + "."
-            sentence_entities = nlp(input_sentence)
-            entities += sentence_entities
-        except IndexError:  # 1541 max length for input sentence
-            omitted_articles += [article]
-            continue
-
-    [print(ent) for ent in entities]
-    print("-" * 100)
-    formatted_entities = format_entities(entities, text)
-    json_output += [{"article": article, "entities": formatted_entities}]
-
-    [print(ent) for ent in formatted_entities]
-    # validate_scores(formatted_entities)
-
-# write_output_to_file(json_output, "data/output/results_10k.jsonl")
-# write_output_to_file(omitted_articles, "data/output/omitted_10k.jsonl")
+    for article in entities:
+        print("-" * 100)
+        [print(entity) for entity in article["entities"]]

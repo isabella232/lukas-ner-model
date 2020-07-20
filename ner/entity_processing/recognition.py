@@ -121,20 +121,20 @@ model_name = "KB/bert-base-swedish-cased-ner"
 # Can now use grouped_entities=True to auto group tokens/words into entities
 nlp = pipeline("ner", model=model_name, tokenizer=model_name)
 
-articles = get_articles("data/input/articles_10k.json")
+articles = get_articles("data/input/articles_tt.jsonl")
 
 
-indexes = random.sample(range(0, len(articles) - 1), 10)
-print(indexes)
-articles = [article for i, article in enumerate(articles) if i in indexes]
+# indexes = random.sample(range(0, len(articles) - 1), 10)
+# print(indexes)
+# articles = [article for i, article in enumerate(articles) if i in indexes]
 
 json_output = []
 omitted_articles = []
 
-for i, article in enumerate(articles[0:10]):
+for i, article in enumerate(articles):
     print("Processing article", i, "…")
 
-    text = article["content_text"]
+    text = article["text"]
     sentences = text.replace("\n\n", ".").split(".")
     entities = []
 
@@ -156,8 +156,7 @@ for i, article in enumerate(articles[0:10]):
     formatted_entities = format_entities(entities, text)
     json_output += [{"article": article, "entities": formatted_entities}]
 
-    [print(ent) for ent in formatted_entities]
     # validate_scores(formatted_entities)
 
-# write_output_to_file(json_output, "data/output/results_10k.jsonl")
-# write_output_to_file(omitted_articles, "data/output/omitted_10k.jsonl")
+write_output_to_file(json_output, "data/output/results_tt.jsonl")
+write_output_to_file(omitted_articles, "data/output/omitted_tt.jsonl")

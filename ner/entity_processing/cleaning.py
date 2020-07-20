@@ -6,10 +6,7 @@ from ..utils.file_handling import create_dfs_from_file, write_df_to_file
 
 
 def create_data_frames():
-    dfs = create_dfs_from_file("data/output/results_10k.jsonl", True)
-
-    articles = dfs[0]
-    entities = dfs[1]
+    articles, entities = create_dfs_from_file("data/output/results_10k.jsonl", True)
 
     entities = entities[entities["word"] != "s"]
     ambiguous = entities[entities["entity"].apply(lambda x: type(x) == list)]

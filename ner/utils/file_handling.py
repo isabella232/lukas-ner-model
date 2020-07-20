@@ -11,19 +11,19 @@ def write_output_to_file(output, path):
 def create_dfs_from_file(path, include_articles):
     with jsonlines.open(path) as reader:
 
-        articles_list = []
-        entities_list = []
+        articles = []
+        entities = []
 
         for obj in reader:
             if include_articles:
-                articles_list += [obj["article"]]
+                articles += [obj["article"]]
             article_id = obj["article"]["id"]
 
             for entity in obj["entities"]:
-                entities_list += [entity]
-                entities_list[-1]["article_id"] = article_id
+                entities += [entity]
+                entities[-1]["article_id"] = article_id
 
-    return pd.DataFrame(articles_list), pd.DataFrame(entities_list)
+    return pd.DataFrame(articles), pd.DataFrame(entities)
 
 
 def write_df_to_file(df, path):
