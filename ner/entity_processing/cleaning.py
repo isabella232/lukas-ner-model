@@ -8,14 +8,10 @@ from ..utils.file_handling import create_dfs_from_file, write_df_to_file
 def create_data_frames():
     articles, entities = create_dfs_from_file("data/output/results_10k.jsonl", True)
 
-    entities = entities[entities["word"] != "s"]
-    ambiguous = entities[entities["entity"].apply(lambda x: type(x) == list)]
-    entities = entities[entities["entity"].apply(lambda x: type(x) != list)]
+    ignore = ["TME", "MSR"]
+    desired = entities[entities["entity"].apply(lambda x: not x in ignore)]
 
-    essentials = ["PER", "ORG", "LOC", "EVN"]
-    essentials = entities[entities["entity"].apply(lambda x: x in essentials)]
-
-    return articles, entities, ambiguous, essentials
+    return articles, entities, desired
 
 
 def calculate_average_score(df):
@@ -30,51 +26,58 @@ def calculate_average_score(df):
     return tot_score / no_scores
 
 
-def initial_analysis(articles, entities, ambiguous, essentials):
+def initial_analysis(articles, entities, desired):
 
     divider = "-" * 100
 
     print(divider, "\nARTICLES\n", articles)
     print(divider, "\nENTITIES\n", entities)
-    print(divider, "\nAMBIGUOUS ENTITIES\n", ambiguous)
-    print(divider, "\nESSENTIAL ENTITIES\n", essentials)
+    print(divider, "\nDESIRED ENTITIES\n", desired)
 
     art_len = len(articles)
     ent_len = len(entities)
-    amb_len = len(ambiguous)
-    ess_len = len(essentials)
+    des_len = len(desired)
 
     avg_score = calculate_average_score(entities)
     avg_no_entities = ent_len / art_len
 
-    amb_score = calculate_average_score(ambiguous)
-    amb_no = amb_len / art_len
-    amb_share = amb_len / (amb_len + ent_len)
-
-    ess_score = calculate_average_score(essentials)
-    ess_no = ess_len / art_len
-    ess_share = ess_len / ent_len
+    des_score = calculate_average_score(desired)
+    des_no = des_len / art_len
+    des_share = des_len / ent_len
 
     print(divider)
     print(
         f"Total:\t\taverage score = {avg_score} | average number of entities per article = {avg_no_entities}"
     )
     print(
-        f"Ambiguous:\taverage score = {amb_score} | average number of entities per article = {amb_no} | share = {amb_share}"
-    )
-    print(
-        f"Essential:\taverage score = {ess_score} | average number of entities per article = {ess_no} | share = {ess_share}"
+        f"Desired:\taverage score = {des_score} | average number of entities per article = {des_no} | share = {des_share}"
     )
     print(divider)
 
-    ent_types = ["PER", "ORG", "LOC", "TME", "MSR", "WRK", "EVN", "OBJ"]
+    ent_types = {
+        "O",
+        "OBJ",
+        "TME",
+        "ORG/PRS",
+        "OBJ/ORG",
+        "PRS/WRK",
+        "WRK",
+        "LOC",
+        "ORG",
+        "PER",
+        "LOC/PRS",
+        "LOC/ORG",
+        "MSR",
+        "EVN",
+    }
 
     for ent_type in ent_types:
         filtered = entities[entities["entity"] == ent_type]
-        score = calculate_average_score(filtered)
-        share = len(filtered) / ent_len
+        if not filtered.empty:
+            score = calculate_average_score(filtered)
+            share = len(filtered) / ent_len
 
-        print(f"{ent_type}: share = {share}\t| average score = {score}")
+            print(f"{ent_type}: share = {share}\t| average score = {score}")
 
     print(divider)
 
@@ -105,12 +108,10 @@ def merge_entities(df):
     return deduplicated
 
 
-articles, entities, ambiguous, essentials = create_data_frames()
-initial_analysis(articles, entities, ambiguous, essentials)
+articles, entities, desired = create_data_frames()
+initial_analysis(articles, entities, desired)
 
-df = (
-    essentials.groupby("word")["article_id"].apply(list).reset_index(name="article_ids")
-)
+df = desired.groupby("word")["article_id"].apply(list).reset_index(name="article_ids")
 unique_entities = pd.DataFrame(df)
 
 print("Merging entities…")
@@ -119,6 +120,6 @@ merged_entities["no_occurrences"] = merged_entities["article_ids"].str.len()
 merged_entities = merged_entities.sort_values(by=["no_occurrences"], ascending=False)
 print("Merged!")
 
-write_df_to_file(articles, "data/dataframes/articles_10k.jsonl")
-write_df_to_file(entities, "data/dataframes/unambiguous_entities_10k_df.jsonl")
-write_df_to_file(merged_entities, "data/dataframes/merged_entities_10k_df.jsonl")
+# write_df_to_file(articles, "data/dataframes/articles_10k.jsonl")
+# write_df_to_file(entities, "data/dataframes/all_entities_10k_df.jsonl")
+write_df_to_file(merged_entities, "data/dataframes/NEW_merged_entities_10k_df.jsonl")

@@ -2,6 +2,7 @@ import time
 import re
 import json
 import random
+from string import punctuation
 
 import jsonlines
 from transformers import pipeline
@@ -21,142 +22,146 @@ def get_articles(path):
     return obj_list
 
 
-def handle_ambiguity(current, previous):
-    if not isinstance(previous["entity"], list):
-        previous["entity"] = [previous["entity"]]
-
-    previous["entity"] += [{"type": current["entity"], "subtoken": current["word"]}]
+def avg_score(entity):
+    return sum(entity["score"]) / len(entity["score"])
 
 
-def format_entities(raw_entities, text):
+def handle_ambiguity(previous, current):
+    if avg_score(previous) < current["score"]:
+        previous["entity"] = current["entity"]
 
-    is_char = lambda x: x in ["-", ",", '"', "'", "’", "#"]
 
-    formatted_entities = []
-    no_subtokens = 1
+def group_entities(raw_entities, punct):
+    is_punct = lambda x: x in punct
+    grouped_entities = []
 
-    for i, current in enumerate(raw_entities):
+    for current in raw_entities:
+        # Remove unknown tokens
         if "[UNK]" in current["word"]:
             current["word"] = current["word"].replace("[UNK]", "").strip()
 
+        # Ignore empty tokens
         if not current["word"]:
             current["entity"] = "NA"
             continue
 
-        if formatted_entities:
-            previous = formatted_entities[-1]
+        if grouped_entities:
+            previous = grouped_entities[-1]
             adjacent = previous["index"] == current["index"] - 1
             same_entity = previous["entity"] == current["entity"]
 
-        # End of article
-        eoa = i + 1 >= len(raw_entities)
         is_per_or_loc = current["entity"] == "PER" or current["entity"] == "LOC"
 
-        if not eoa:
-            following = raw_entities[i + 1]
-            # End of sentence
-            eos = following["index"] < current["index"]
-
-            if current["word"] == ":" and following["word"] == "s":
-                following["word"] = ""
-                no_subtokens = 1
-                continue
-
-        if formatted_entities and current["word"].startswith("##"):
+        # Handle subwords
+        if grouped_entities and current["word"].startswith("##"):
             if adjacent:
+                # Handle subwords that are of different entity types
+                if not same_entity:
+                    handle_ambiguity(previous, current)
+
                 previous["index"] = current["index"]
                 previous["word"] += current["word"][2:]
-                previous["score"][-1] += current["score"]
-                no_subtokens += 1
+                previous["score"] += [current["score"]]
 
-                if not same_entity:
-                    handle_ambiguity(current, previous)
-
+            # Ignore subwords that do not have a starting part
             else:
                 current["entity"] = "NA"
 
-        elif formatted_entities and adjacent and same_entity:
-
+        # Handle entities that consist of multiple words
+        elif grouped_entities and adjacent and same_entity:
+            # Ignore persons and locations that have "," or "och" in their names
             if is_per_or_loc and (current["word"] == "," or current["word"] == "och"):
                 current["entity"] = "NA"
                 continue
 
             previous["index"] = current["index"]
-            either_is_char = is_char(current["word"]) or is_char(previous["word"][-1])
+            either_punct = is_punct(previous["word"][-1]) or is_punct(current["word"])
 
-            if either_is_char and not current["word"] == "och":
-                previous["word"] += current["word"]
-            else:
-                previous["word"] += " " + current["word"]
+            # Determine if the word suffix should be preceded by a space
+            suffix = (
+                current["word"]
+                if either_punct and not current["word"] == "och"
+                else " " + current["word"]
+            )
 
+            previous["word"] += suffix
             previous["score"] += [current["score"]]
-            no_subtokens = 1
 
+        # Ignore single characters and "s"
+        elif is_punct(current["word"]) or current["word"] == "s":
+            current["word"] = "NA"
+
+        # Handle trivial entities
         else:
             current["score"] = [current["score"]]
-            formatted_entities += [current.copy()]
-            no_subtokens = 1
+            grouped_entities += [current.copy()]
 
-        if not eoa:
-            # End of entity series
-            eoes = no_subtokens > 1 and not following["word"].startswith("##")
+    for entity in grouped_entities:
+        entity["score"] = avg_score(entity)
+        del entity["index"]
 
-        if (eoa or eos) or eoes:
-            avg_score = formatted_entities[-1]["score"][-1] / no_subtokens
-            formatted_entities[-1]["score"][-1] = avg_score
-            no_subtokens = 1
-
-    return formatted_entities
+    return grouped_entities
 
 
 def validate_scores(entities):
     for entity in entities:
-        for score in entity["score"]:
-            if score > 1:
-                print("Score larger than 1.0 for:", entity)
-                exit()
+        if entity["score"] > 1.0:
+            print("Score larger than 1.0 for:", entity)
+            exit()
 
 
-model_name = "KB/bert-base-swedish-cased-ner"
-# Can now use grouped_entities=True to auto group tokens/words into entities
-nlp = pipeline("ner", model=model_name, tokenizer=model_name)
+def recognize_entities(articles):
+    """
+    Possible to use parameter grouped_entities=True in pipeline to auto-group
+    tokens/words into entities as of pr #3957 in the transformers repo. However,
+    it does not work as well (yet, 2020-07) as the group_entities function above.
+    """
+    model_name = "KB/bert-base-swedish-cased-ner"
+    nlp = pipeline("ner", model=model_name, tokenizer=model_name)
 
-articles = get_articles("data/input/articles_tt.jsonl")
+    # indexes = random.sample(range(0, len(articles) - 1), 10)
+    # articles = [article for i, article in enumerate(articles) if i in indexes]
+
+    punct = set(punctuation)
+    punct.update("’")
+    all_entities = []
+    omitted_articles = []
+
+    for i, article in enumerate(articles):
+        print("Processing article", i, "…")
+
+        text = article["text"].replace("\n\n", ".")
+        sentences = re.findall(".*?[.?!]", text)
+        entities = []
+
+        for sentence in sentences:
+            # Omit any article containing HTML tags
+            if re.search("<.*>", sentence):
+                omitted_articles += [article]
+                break
+
+            input_sentence = sentence.strip()
+            if not input_sentence or input_sentence in punct:
+                continue
+
+            try:
+                sentence_entities = nlp(input_sentence)
+                entities += sentence_entities
+            except IndexError:  # 1541 max length for input sentence
+                omitted_articles += [article]
+                break
+
+        grouped_entities = group_entities(entities, punct)
+        all_entities += [{"article": article, "entities": grouped_entities}]
+
+    # validate_scores(grouped_entities)
+
+    return all_entities, omitted_articles
 
 
-# indexes = random.sample(range(0, len(articles) - 1), 10)
-# print(indexes)
-# articles = [article for i, article in enumerate(articles) if i in indexes]
+if __name__ == "__main__":
+    articles = get_articles("data/input/articles_tt_new.jsonl")
+    entities, omitted = recognize_entities(articles)
 
-json_output = []
-omitted_articles = []
-
-for i, article in enumerate(articles):
-    print("Processing article", i, "…")
-
-    text = article["text"]
-    sentences = text.replace("\n\n", ".").split(".")
-    entities = []
-
-    for sentence in sentences:
-        if re.search("<.*>", sentence):
-            omitted_articles += [article]
-            break
-        elif not sentence.strip():
-            continue
-
-        try:
-            input_sentence = sentence.strip() + "."
-            sentence_entities = nlp(input_sentence)
-            entities += sentence_entities
-        except IndexError:  # 1541 max length for input sentence
-            omitted_articles += [article]
-            continue
-
-    formatted_entities = format_entities(entities, text)
-    json_output += [{"article": article, "entities": formatted_entities}]
-
-    # validate_scores(formatted_entities)
-
-write_output_to_file(json_output, "data/output/results_tt.jsonl")
-write_output_to_file(omitted_articles, "data/output/omitted_tt.jsonl")
+    write_output_to_file(entities, "data/output/results_tt_new.jsonl")
+    write_output_to_file(omitted, "data/output/omitted_tt_new.jsonl")

@@ -90,7 +90,7 @@ def link_entities_to_categories(articles, entities):
 
 
 articles = read_df_from_file("data/dataframes/articles_10k_df.jsonl")
-unam_entities = read_df_from_file("data/dataframes/unambiguous_entities_10k_df.jsonl")
+all_entities = read_df_from_file("data/dataframes/all_entities_10k_df.jsonl")
 merged_entities = read_df_from_file("data/dataframes/merged_entities_10k_df.jsonl")
 
 
@@ -102,7 +102,7 @@ count = count[count["no_entities"] > 1]
 
 # Visualize the relationship between text length and the number of entities found (per article)
 per_article_list = []
-grouped_entities = unam_entities.groupby(["article_id"]).count().reset_index()
+grouped_entities = all_entities.groupby(["article_id"]).count().reset_index()
 
 for i in articles.index:
     no_entities = grouped_entities[grouped_entities["article_id"] == articles["id"][i]]

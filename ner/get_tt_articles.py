@@ -7,14 +7,14 @@ from urllib.error import HTTPError
 from .utils.file_handling import write_output_to_file
 
 
-def get_subject_articles(subject_id, products):
+def get_subject_articles(subject_id, products, processed_aids):
     params = {
         "ak": "<key>",
         "q": f"{subject_id:02d}000000",
         "p": ",".join(products),
-        "trs": "2018-01-01",
+        "trs": "2010-01-01",
         "tre": "2020-07-20",
-        "s": 1,
+        "s": 500,
     }
 
     resp = requests.get("https://tt.se/api/search", params=params)
@@ -22,14 +22,20 @@ def get_subject_articles(subject_id, products):
 
     articles = []
     for article in resp.json():
-        aid = article["originaltransmissionreference"]
-        products = [product["code"] for product in article["product"]]
-        uri = article["uri"] + "-cutpaste.txt"
-
-        categories = []
-        text = ""
-
         try:
+            aid = article["originaltransmissionreference"]
+
+            if aid in processed_aids:
+                continue
+
+            processed_aids.add(aid)
+
+            products = [product["code"] for product in article["product"]]
+            uri = article["uri"] + "-cutpaste.txt"
+
+            categories = []
+            text = ""
+
             categories = [subj["name"] for subj in article["subject"]]
 
             resource = urlopen(uri)
@@ -41,14 +47,21 @@ def get_subject_articles(subject_id, products):
                     text += sentence.strip() + " "
                 else:
                     break
-        except HTTPError:
-            continue
 
-        articles += [
-            {"id": aid, "products": products, "categories": categories, "text": text}
-        ]
+            articles += [
+                {
+                    "id": aid,
+                    "products": products,
+                    "categories": categories,
+                    "text": text,
+                }
+            ]
 
-    return articles
+        except (HTTPError, KeyError):
+            print("Error!")
+            pass
+
+    return articles, processed_aids
 
 
 products = [
@@ -71,11 +84,14 @@ products = [
 ]
 
 all_articles = []
+processed_aids = set()
 for subject_id in range(1, 18):
     print(subject_id)
 
-    articles = get_subject_articles(subject_id, products)
+    articles, processed_aids = get_subject_articles(
+        subject_id, products, processed_aids
+    )
     all_articles += articles
-    [print(article["categories"]) for article in articles]
+    # [print(article["categories"]) for article in articles]
 
-# write_output_to_file(all_articles, "data/input/articles_tt.jsonl")
+write_output_to_file(all_articles, "data/input/articles_tt_new.jsonl")

@@ -5,6 +5,15 @@ import pandas as pd
 from ..utils.file_handling import create_dfs_from_file, write_df_to_file
 
 
+def create_data_frames():
+    articles, entities = create_dfs_from_file("data/output/results_tt_new.jsonl", True)
+
+    ignore = {"TME", "MSR"}
+    entities = entities[entities["entity"].apply(lambda x: x not in ignore)]
+
+    return articles, entities
+
+
 def calculate_average_score(df):
     tot_score = 0
     no_scores = 0
@@ -43,7 +52,7 @@ def merge_entities(df):
     return deduplicated
 
 
-articles, entities = create_dfs_from_file("data/output/results_tt.jsonl", True)
+articles, entities = create_data_frames()
 
 df = entities.groupby("word")["article_id"].apply(list).reset_index(name="article_ids")
 unique_entities = pd.DataFrame(df)
@@ -54,8 +63,6 @@ merged_entities["no_occurrences"] = merged_entities["article_ids"].str.len()
 merged_entities = merged_entities.sort_values(by=["no_occurrences"], ascending=False)
 print("Merged!")
 
-print(merged_entities)
-
-write_df_to_file(articles, "data/dataframes/articles_tt.jsonl")
-write_df_to_file(entities, "data/dataframes/unambiguous_entities_tt_df.jsonl")
-write_df_to_file(merged_entities, "data/dataframes/merged_entities_tt_df.jsonl")
+write_df_to_file(articles, "data/dataframes/articles_tt_new.jsonl")
+write_df_to_file(entities, "data/dataframes/all_entities_tt_new_df.jsonl")
+write_df_to_file(merged_entities, "data/dataframes/merged_entities_tt_new_df.jsonl")
