@@ -63,6 +63,6 @@ merged_entities["no_occurrences"] = merged_entities["article_ids"].str.len()
 merged_entities = merged_entities.sort_values(by=["no_occurrences"], ascending=False)
 print("Merged!")
 
-write_df_to_file(articles, "data/dataframes/articles_tt_new.jsonl")
+write_df_to_file(articles, "data/dataframes/articles_tt_new_df.jsonl")
 write_df_to_file(entities, "data/dataframes/all_entities_tt_new_df.jsonl")
 write_df_to_file(merged_entities, "data/dataframes/merged_entities_tt_new_df.jsonl")

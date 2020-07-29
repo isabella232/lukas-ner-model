@@ -54,6 +54,8 @@ def create_lookup():
             pass
 
         code = category["qcode"].replace("medtop:", "")
+        if code in iptc_tt:
+            print(name)
         tt = True if code in iptc_tt else False
 
         embedding = create_embedding(name)
@@ -122,23 +124,26 @@ def category_match(keyword):
     return lookup[max_ind], max_val
 
 
-def find_entities(keyword):
+def find_entities(keyword, freq_thresh, uniq_thresh):
     categories = read_df_from_file("data/dataframes/categories_tt_new_df.jsonl")
     lookup = read_df_from_file("data/dataframes/tt_entity_lookup_df.jsonl")
-
-    match = categories[categories["category"] == keyword["name"]]
-    entities = match["entities"].tolist()[0]
-    mean = pd.DataFrame([e[0] for e in entities]).mean().item()
     relevant_entities = []
 
-    for entity in entities:
-        frequency = entity[0]
-        if frequency > 0.95 * mean:
-            occurrences = lookup[lookup["entity"] == entity[1]]["categories"].item()
-            tot_freq = sum(occurrences.values())
-            uniqueness = frequency / tot_freq
-            if uniqueness > 0.4:
-                relevant_entities += [entity[1]]
+    filter_series = pd.Series(list(zip(*categories["category"]))[0])
+    match = categories[filter_series == keyword["code"]]
+
+    if not match.empty:
+        entities = match["entities"].tolist()[0]
+        quant = pd.DataFrame([e[0] for e in entities]).quantile(freq_thresh).item()
+
+        for entity in entities:
+            frequency = entity[0]
+            if frequency > quant:
+                occurrences = lookup[lookup["entity"] == entity[1]]["categories"].item()
+                tot_freq = sum(occurrences.values())
+                uniqueness = frequency / tot_freq
+                if uniqueness > uniq_thresh:
+                    relevant_entities += [entity[1]]
 
     return relevant_entities
 
@@ -154,12 +159,15 @@ if __name__ == "__main__":
     with open("data/pickles/iptc_embeddings.pickle", "rb") as f:
         lookup = torch.load(f)
 
-    keyword = "Musik"
+    # Must be the name of an IPTC category
+    keyword = "Bilar"
 
     match, sim = category_match(keyword)
     tt_match = find_nearest_tt(match)
-    entities = find_entities(tt_match)
+    entities = find_entities(tt_match, 0.8, 0.4)
     [print(e) for e in entities]
+    print("_" * 50)
+    print(tt_match["name"])
 
     # str_i = "jazz"
     # str_j = "musik"

@@ -16,7 +16,7 @@ def link_entities_to_categories(articles, entities):
             categories_list += [{"category": category, "article_id": aid}]
     categories = pd.DataFrame(categories_list)
     categories = (
-        categories.groupby("category")["article_id"]
+        categories.groupby(categories["category"].map(tuple))["article_id"]
         .apply(list)
         .reset_index(name="article_ids")
     )
@@ -76,7 +76,8 @@ def link_categories_to_entities(articles, entities):
         aids = entity["article_ids"]
 
         for aid in aids:
-            ent_cats += articles[articles["id"] == aid]["categories"].tolist()[0]
+            cats = articles[articles["id"] == aid]["categories"].tolist()[0]
+            ent_cats += [tuple(cat) for cat in cats]
 
         ent_cats = dict(Counter(ent_cats))
         linked += [{"entity": entity["word"], "categories": ent_cats}]
