@@ -2,19 +2,9 @@ import os
 
 import pandas as pd
 
-import logging
-
 import torch
-from torch import Tensor
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
-
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
-    datefmt="%m/%d/%Y %H:%M:%S",
-    level=logging.INFO,
-)
-logger = logging.getLogger(__name__)
 
 
 class InputExample(object):
@@ -50,9 +40,10 @@ class InputFeatures(object):
 
 
 class MultiLabelTextProcessor:
-    def __init__(self, data_dir, tokenizer):
+    def __init__(self, data_dir, tokenizer, logger):
         self.data_dir = data_dir
         self.tokenizer = tokenizer
+        self.logger = logger
         self.labels = [
             "01000000",
             "02000000",
@@ -80,11 +71,11 @@ class MultiLabelTextProcessor:
         # logger.info("LOOKING AT {}".format(os.path.join(data_dir, filename)))
         if size == -1:
             data_df = pd.read_csv(os.path.join(self.data_dir, filename))
-            #             data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
+            # data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
             return self._create_examples(data_df, "train")
         else:
             data_df = pd.read_csv(os.path.join(self.data_dir, filename))
-            #             data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
+            # data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
             return self._create_examples(data_df.sample(size), "train")
 
     def get_dev_examples(self, size=-1):
@@ -92,11 +83,11 @@ class MultiLabelTextProcessor:
         filename = "test.csv"
         if size == -1:
             data_df = pd.read_csv(os.path.join(self.data_dir, filename))
-            #             data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
+            # data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
             return self._create_examples(data_df, "dev")
         else:
             data_df = pd.read_csv(os.path.join(self.data_dir, filename))
-            #             data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
+            # data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
             return self._create_examples(data_df.sample(size), "dev")
 
     def get_test_examples(self, data_dir, data_file_name, size=-1):
@@ -140,11 +131,9 @@ class MultiLabelTextProcessor:
             else:
                 tokens_b.pop()
 
-    def convert_examples_to_features(
-        self, examples, max_seq_length
-    ):
+    def convert_examples_to_features(self, examples, max_seq_length):
         """Loads a data file into a list of `InputBatch`s."""
-        label_map = {label: i for i, label in enumerate(self.labels)}
+        # label_map = {label: i for i, label in enumerate(self.labels)}
 
         features = []
         for (ex_index, example) in enumerate(examples):
@@ -187,7 +176,7 @@ class MultiLabelTextProcessor:
                 tokens += tokens_b + ["[SEP]"]
                 segment_ids += [1] * (len(tokens_b) + 1)
 
-            input_ids = tokenizer.convert_tokens_to_ids(tokens)
+            input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
 
             # The mask has 1 for real tokens and 0 for padding tokens. Only real
             # tokens are attended to.
@@ -208,13 +197,19 @@ class MultiLabelTextProcessor:
                 labels_ids.append(float(label))
             # label_id = label_map[example.label]
             if ex_index < 0:
-                logger.info("*** Example ***")
-                logger.info("guid: %s" % (example.guid))
-                logger.info("tokens: %s" % " ".join([str(x) for x in tokens]))
-                logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-                logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-                logger.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-                logger.info("label: %s (id = %s)" % (example.labels, labels_ids))
+                self.logger.info("*** Example ***")
+                self.logger.info("guid: %s" % (example.guid))
+                self.logger.info("tokens: %s" % " ".join([str(x) for x in tokens]))
+                self.logger.info(
+                    "input_ids: %s" % " ".join([str(x) for x in input_ids])
+                )
+                self.logger.info(
+                    "input_mask: %s" % " ".join([str(x) for x in input_mask])
+                )
+                self.logger.info(
+                    "segment_ids: %s" % " ".join([str(x) for x in segment_ids])
+                )
+                self.logger.info("label: %s (id = %s)" % (example.labels, labels_ids))
 
             features.append(
                 InputFeatures(
@@ -226,7 +221,7 @@ class MultiLabelTextProcessor:
             )
         return features
 
-    def pack_features_in_dataloader(self, features, local_rank, batch_size):
+    def pack_features_in_dataloader(self, features, local_rank, batch_size, train):
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
         all_input_mask = torch.tensor(
             [f.input_mask for f in features], dtype=torch.long
@@ -241,12 +236,13 @@ class MultiLabelTextProcessor:
         data = TensorDataset(
             all_input_ids, all_input_mask, all_segment_ids, all_label_ids
         )
-        if local_rank == -1:
+
+        if not train:
+            sampler = SequentialSampler(data)
+        elif local_rank == -1:
             sampler = RandomSampler(data)
         else:
             sampler = DistributedSampler(data)
-        dataloader = DataLoader(
-            data, sampler=sampler, batch_size=batch_size]
-        )
+        dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 
         return dataloader

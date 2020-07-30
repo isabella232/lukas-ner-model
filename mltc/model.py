@@ -1,12 +1,6 @@
-from transformers import (
-    BertForSequenceClassification,
-    BertModel,
-    BertConfig,
-    BertPreTrainedModel,
-)
+from transformers import BertForSequenceClassification, BertModel
 
 import torch
-from torch import Tensor
 from torch.nn import BCEWithLogitsLoss
 
 
@@ -67,9 +61,6 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
         head_mask=None,
     ):
 
-        import pdb
-
-        # pdb.set_trace()
         outputs = self.bert(
             input_ids,
             position_ids=position_ids,
@@ -102,3 +93,10 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
     def unfreeze_bert_encoder(self):
         for param in self.bert.parameters():
             param.requires_grad = True
+
+    def save(self):
+        model_to_save = (
+            self.module if hasattr(self, "module") else self
+        )  # Only save the model it-self
+        output_model_file = "mltc/data/model_files/finetuned_pytorch_model.bin"
+        torch.save(model_to_save.state_dict(), output_model_file)

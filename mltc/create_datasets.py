@@ -3,8 +3,6 @@ import re
 import jsonlines
 import pandas as pd
 
-from ner.utils.file_handling import write_df_to_file
-
 
 def get_articles(path):
     with jsonlines.open(path) as reader:
@@ -126,4 +124,3 @@ if __name__ == "__main__":
 
     train.to_csv("mltc/data/train.csv", index=False)
     test.to_csv("mltc/data/test.csv", index=False)
-
