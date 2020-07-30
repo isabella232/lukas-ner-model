@@ -10,7 +10,7 @@ from torch import Tensor
 from torch.nn import BCEWithLogitsLoss
 
 
-class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
+class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
     """BERT model for classification.
     This module is composed of the BERT model with a linear layer on top of
     the pooled output.
@@ -35,6 +35,18 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
             Outputs the CrossEntropy classification loss of the output with the labels.
         if `labels` is `None`:
             Outputs the classification logits of shape [batch_size, num_labels].
+    Example usage:
+    ```python
+    # Already been converted into WordPiece token ids
+    input_ids = torch.LongTensor([[31, 51, 99], [15, 5, 0]])
+    input_mask = torch.LongTensor([[1, 1, 1], [1, 1, 0]])
+    token_type_ids = torch.LongTensor([[0, 0, 1], [0, 1, 0]])
+    config = BertConfig(vocab_size_or_config_json_file=32000, hidden_size=768,
+        num_hidden_layers=12, num_attention_heads=12, intermediate_size=3072)
+    num_labels = 2
+    model = BertForSequenceClassification(config, num_labels)
+    logits = model(input_ids, token_type_ids, input_mask)
+    ```
     """
 
     def __init__(self, config, num_labels=2):
@@ -44,39 +56,44 @@ class BertForMultiLabelSequenceClassification(BertPreTrainedModel):
         self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
         self.classifier = torch.nn.Linear(config.hidden_size, config.num_labels)
         self.apply(self._init_weights)
-        self.args = {
-            "max_seq_length": 512,
-            "do_train": True,
-            "do_eval": True,
-            "do_lower_case": True,
-            "train_batch_size": 32,
-            "eval_batch_size": 32,
-            "learning_rate": 3e-5,
-            "num_train_epochs": 4.0,
-            "warmup_proportion": 0.1,
-            "no_cuda": False,
-            "local_rank": -1,
-            "seed": 42,
-            "gradient_accumulation_steps": 1,
-            "optimize_on_cpu": False,
-            "loss_scale": 128,
-        }
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, labels=None):
-        _, pooled_output = self.bert(
-            input_ids, token_type_ids, attention_mask, output_all_encoded_layers=False
+    def forward(
+        self,
+        input_ids,
+        token_type_ids=None,
+        attention_mask=None,
+        labels=None,
+        position_ids=None,
+        head_mask=None,
+    ):
+
+        import pdb
+
+        # pdb.set_trace()
+        outputs = self.bert(
+            input_ids,
+            position_ids=position_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            head_mask=head_mask,
         )
+        pooled_output = outputs[1]
+
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
+        # add hidden states and attention if they are here
+        outputs = (logits,) + outputs[2:]
+
         if labels is not None:
             loss_fct = BCEWithLogitsLoss()
+
             loss = loss_fct(
                 logits.view(-1, self.num_labels), labels.view(-1, self.num_labels)
             )
-            return loss
-        else:
-            return logits
+            outputs = (loss,) + outputs
+
+        return outputs  # (loss), logits, (hidden_states), (attentions)
 
     def freeze_bert_encoder(self):
         for param in self.bert.parameters():

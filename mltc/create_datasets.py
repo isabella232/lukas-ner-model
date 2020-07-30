@@ -18,6 +18,7 @@ def transform(articles, is_mm, mapping):
 
     for article in articles:
         aid = article["id"]
+        categories = dict(zip(list(mapping.values()), [0] * len(mapping)))
 
         if is_mm:
             brand = "MM"
@@ -25,24 +26,22 @@ def transform(articles, is_mm, mapping):
             if re.search("<.*>", text):
                 continue
 
-            categories = [
-                mapping[tag["category"]]
-                for tag in article["tags"]
-                if tag["category"].startswith("RYF-") and len(tag["category"]) == 7
-            ]
+            for tag in article["tags"]:
+                category = tag["category"]
+                if category.startswith("RYF-") and len(category) == 7:
+                    categories[mapping[category]] = 1
 
         else:
             brand = "TT"
             text = article["text"]
-            categories = [
-                category[0]
-                for category in article["categories"]
-                if category[0].endswith("000000")
-            ]
+            for category in article["categories"]:
+                if category[0].endswith("000000"):
+                    categories[category[0]] = 1
 
-        transformed += [
-            {"aid": aid, "brand": brand, "text": text, "categories": categories}
-        ]
+        if not text:
+            continue
+
+        transformed += [{"aid": aid, "brand": brand, "text": text, **categories}]
 
     return pd.DataFrame(transformed)
 
@@ -57,6 +56,25 @@ def check_distribution(df):
 if __name__ == "__main__":
     seed = 1234567890
 
+    names = [
+        "Konst, kultur och nöje",
+        "Brott, lag och rätt",
+        "Katastrofer och olyckor",
+        "Ekonomi, affärer och finans",
+        "Utbildning",
+        "Miljö och natur",
+        "Medicin och hälsa",
+        "Mänskligt",
+        "Arbete",
+        "Fritid och livsstil",
+        "Politik",
+        "Etik och religion",
+        "Teknik och vetenskap",
+        "Samhälle",
+        "Sport",
+        "Krig, konflikter och oroligheter",
+        "Väder",
+    ]
     iptc_codes = [f"{i:02d}000000" for i in range(1, 18)]
     mm_codes = [
         "RYF-XKI",
@@ -85,11 +103,11 @@ if __name__ == "__main__":
     tt_df = transform(tt_articles, False, mapping)
     mm_df = transform(mm_articles, True, mapping)
 
-    df = pd.DataFrame(columns=["aid", "brand", "text", "categories"])
+    df = pd.DataFrame()
     for code in iptc_codes:
-        tt_filt = tt_df[tt_df["categories"].apply(lambda x: code in x)]
-        mm_filt = mm_df[mm_df["categories"].apply(lambda x: code in x)]
-        print(code, len(tt_filt.index), len(mm_filt.index))
+        tt_filt = tt_df[tt_df[code] == 1]
+        mm_filt = mm_df[mm_df[code] == 1]
+        # print(code, len(tt_filt.index), len(mm_filt.index))
         if len(tt_filt.index) < 150:
             mm_size = 300 - len(tt_filt.index)
             mm_filt = mm_filt.sample(n=mm_size, random_state=seed)
@@ -99,12 +117,13 @@ if __name__ == "__main__":
         df = df.append([tt_filt, mm_filt], ignore_index=True)
 
     df = df.drop_duplicates(subset=["aid"])
-    print(df)
-    check_distribution(df)
+    # check_distribution(df)
 
     train = df.sample(frac=0.8, random_state=seed)
     test = df.drop(train.index)
 
-    train.to_csv("mltc/data/train.csv")
-    test.to_csv("mltc/data/test.csv")
+    print(train)
+
+    train.to_csv("mltc/data/train.csv", index=False)
+    test.to_csv("mltc/data/test.csv", index=False)
 

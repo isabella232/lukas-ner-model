@@ -1,5 +1,20 @@
 import os
+
 import pandas as pd
+
+import logging
+
+import torch
+from torch import Tensor
+from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data.distributed import DistributedSampler
+
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+    datefmt="%m/%d/%Y %H:%M:%S",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 
 class InputExample(object):
@@ -35,8 +50,9 @@ class InputFeatures(object):
 
 
 class MultiLabelTextProcessor:
-    def __init__(self, data_dir):
+    def __init__(self, data_dir, tokenizer):
         self.data_dir = data_dir
+        self.tokenizer = tokenizer
         self.labels = [
             "01000000",
             "02000000",
@@ -60,6 +76,7 @@ class MultiLabelTextProcessor:
     def get_train_examples(self, size=-1):
         """Gets a collection of `InputExample`s for the train set."""
         filename = "train.csv"
+        # dtype_dict = {"aid": str, "brand": str, "text": str, "categories": "category"}
         # logger.info("LOOKING AT {}".format(os.path.join(data_dir, filename)))
         if size == -1:
             data_df = pd.read_csv(os.path.join(self.data_dir, filename))
@@ -99,7 +116,7 @@ class MultiLabelTextProcessor:
             brand = row[1]
             text_a = row[2]
             if labels_available:
-                labels = row[3]
+                labels = row[3:]
             else:
                 labels = []
             examples.append(
@@ -107,106 +124,129 @@ class MultiLabelTextProcessor:
             )
         return examples
 
+    def _truncate_seq_pair(self, tokens_a, tokens_b, max_length):
+        """Truncates a sequence pair in place to the maximum length."""
 
-def _truncate_seq_pair(tokens_a, tokens_b, max_length):
-    """Truncates a sequence pair in place to the maximum length."""
+        # This is a simple heuristic which will always truncate the longer sequence
+        # one token at a time. This makes more sense than truncating an equal percent
+        # of tokens from each, since if one sequence is very short then each token
+        # that's truncated likely contains more information than a longer sequence.
+        while True:
+            total_length = len(tokens_a) + len(tokens_b)
+            if total_length <= max_length:
+                break
+            if len(tokens_a) > len(tokens_b):
+                tokens_a.pop()
+            else:
+                tokens_b.pop()
 
-    # This is a simple heuristic which will always truncate the longer sequence
-    # one token at a time. This makes more sense than truncating an equal percent
-    # of tokens from each, since if one sequence is very short then each token
-    # that's truncated likely contains more information than a longer sequence.
-    while True:
-        total_length = len(tokens_a) + len(tokens_b)
-        if total_length <= max_length:
-            break
-        if len(tokens_a) > len(tokens_b):
-            tokens_a.pop()
-        else:
-            tokens_b.pop()
+    def convert_examples_to_features(
+        self, examples, max_seq_length
+    ):
+        """Loads a data file into a list of `InputBatch`s."""
+        label_map = {label: i for i, label in enumerate(self.labels)}
 
+        features = []
+        for (ex_index, example) in enumerate(examples):
+            tokens_a = self.tokenizer.tokenize(example.text_a)
 
-def convert_examples_to_features(examples, label_list, max_seq_length, tokenizer):
-    """Loads a data file into a list of `InputBatch`s."""
+            tokens_b = None
+            if example.text_b:
+                tokens_b = self.tokenizer.tokenize(example.text_b)
+                # Modifies `tokens_a` and `tokens_b` in place so that the total
+                # length is less than the specified length.
+                # Account for [CLS], [SEP], [SEP] with "- 3"
+                self._truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
+            else:
+                # Account for [CLS] and [SEP] with "- 2"
+                if len(tokens_a) > max_seq_length - 2:
+                    tokens_a = tokens_a[: (max_seq_length - 2)]
 
-    label_map = {label: i for i, label in enumerate(label_list)}
+            # The convention in BERT is:
+            # (a) For sequence pairs:
+            #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
+            #  type_ids: 0   0  0    0    0     0       0 0    1  1  1  1   1 1
+            # (b) For single sequences:
+            #  tokens:   [CLS] the dog is hairy . [SEP]
+            #  type_ids: 0   0   0   0  0     0 0
+            #
+            # Where "type_ids" are used to indicate whether this is the first
+            # sequence or the second sequence. The embedding vectors for `type=0` and
+            # `type=1` were learned during pre-training and are added to the wordpiece
+            # embedding vector (and position vector). This is not *strictly* necessary
+            # since the [SEP] token unambigiously separates the sequences, but it makes
+            # it easier for the model to learn the concept of sequences.
+            #
+            # For classification tasks, the first vector (corresponding to [CLS]) is
+            # used as as the "sentence vector". Note that this only makes sense because
+            # the entire model is fine-tuned.
+            tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
+            segment_ids = [0] * len(tokens)
 
-    features = []
-    for (ex_index, example) in enumerate(examples):
-        tokens_a = tokenizer.tokenize(example.text_a)
+            if tokens_b:
+                tokens += tokens_b + ["[SEP]"]
+                segment_ids += [1] * (len(tokens_b) + 1)
 
-        tokens_b = None
-        if example.text_b:
-            tokens_b = tokenizer.tokenize(example.text_b)
-            # Modifies `tokens_a` and `tokens_b` in place so that the total
-            # length is less than the specified length.
-            # Account for [CLS], [SEP], [SEP] with "- 3"
-            _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
-        else:
-            # Account for [CLS] and [SEP] with "- 2"
-            if len(tokens_a) > max_seq_length - 2:
-                tokens_a = tokens_a[: (max_seq_length - 2)]
+            input_ids = tokenizer.convert_tokens_to_ids(tokens)
 
-        # The convention in BERT is:
-        # (a) For sequence pairs:
-        #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-        #  type_ids: 0   0  0    0    0     0       0 0    1  1  1  1   1 1
-        # (b) For single sequences:
-        #  tokens:   [CLS] the dog is hairy . [SEP]
-        #  type_ids: 0   0   0   0  0     0 0
-        #
-        # Where "type_ids" are used to indicate whether this is the first
-        # sequence or the second sequence. The embedding vectors for `type=0` and
-        # `type=1` were learned during pre-training and are added to the wordpiece
-        # embedding vector (and position vector). This is not *strictly* necessary
-        # since the [SEP] token unambigiously separates the sequences, but it makes
-        # it easier for the model to learn the concept of sequences.
-        #
-        # For classification tasks, the first vector (corresponding to [CLS]) is
-        # used as as the "sentence vector". Note that this only makes sense because
-        # the entire model is fine-tuned.
-        tokens = ["[CLS]"] + tokens_a + ["[SEP]"]
-        segment_ids = [0] * len(tokens)
+            # The mask has 1 for real tokens and 0 for padding tokens. Only real
+            # tokens are attended to.
+            input_mask = [1] * len(input_ids)
 
-        if tokens_b:
-            tokens += tokens_b + ["[SEP]"]
-            segment_ids += [1] * (len(tokens_b) + 1)
+            # Zero-pad up to the sequence length.
+            padding = [0] * (max_seq_length - len(input_ids))
+            input_ids += padding
+            input_mask += padding
+            segment_ids += padding
 
-        input_ids = tokenizer.convert_tokens_to_ids(tokens)
+            assert len(input_ids) == max_seq_length
+            assert len(input_mask) == max_seq_length
+            assert len(segment_ids) == max_seq_length
 
-        # The mask has 1 for real tokens and 0 for padding tokens. Only real
-        # tokens are attended to.
-        input_mask = [1] * len(input_ids)
+            labels_ids = []
+            for label in example.labels:
+                labels_ids.append(float(label))
+            # label_id = label_map[example.label]
+            if ex_index < 0:
+                logger.info("*** Example ***")
+                logger.info("guid: %s" % (example.guid))
+                logger.info("tokens: %s" % " ".join([str(x) for x in tokens]))
+                logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
+                logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
+                logger.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+                logger.info("label: %s (id = %s)" % (example.labels, labels_ids))
 
-        # Zero-pad up to the sequence length.
-        padding = [0] * (max_seq_length - len(input_ids))
-        input_ids += padding
-        input_mask += padding
-        segment_ids += padding
-
-        assert len(input_ids) == max_seq_length
-        assert len(input_mask) == max_seq_length
-        assert len(segment_ids) == max_seq_length
-
-        labels_ids = []
-        for label in example.labels:
-            labels_ids.append(float(label))
-
-        #         label_id = label_map[example.label]
-        # if ex_index < 0:
-        #     logger.info("*** Example ***")
-        #     logger.info("guid: %s" % (example.guid))
-        #     logger.info("tokens: %s" % " ".join([str(x) for x in tokens]))
-        #     logger.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-        #     logger.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-        #     logger.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-        #     logger.info("label: %s (id = %s)" % (example.labels, labels_ids))
-
-        features.append(
-            InputFeatures(
-                input_ids=input_ids,
-                input_mask=input_mask,
-                segment_ids=segment_ids,
-                label_ids=labels_ids,
+            features.append(
+                InputFeatures(
+                    input_ids=input_ids,
+                    input_mask=input_mask,
+                    segment_ids=segment_ids,
+                    label_ids=labels_ids,
+                )
             )
+        return features
+
+    def pack_features_in_dataloader(self, features, local_rank, batch_size):
+        all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
+        all_input_mask = torch.tensor(
+            [f.input_mask for f in features], dtype=torch.long
         )
-    return features
+        all_segment_ids = torch.tensor(
+            [f.segment_ids for f in features], dtype=torch.long
+        )
+
+        all_label_ids = torch.tensor(
+            [f.label_ids for f in features], dtype=torch.float,
+        )
+        data = TensorDataset(
+            all_input_ids, all_input_mask, all_segment_ids, all_label_ids
+        )
+        if local_rank == -1:
+            sampler = RandomSampler(data)
+        else:
+            sampler = DistributedSampler(data)
+        dataloader = DataLoader(
+            data, sampler=sampler, batch_size=batch_size]
+        )
+
+        return dataloader

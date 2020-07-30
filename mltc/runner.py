@@ -4,10 +4,14 @@ import numpy as np
 
 from .model import BertForMultiLabelSequenceClassification
 from .processor import MultiLabelTextProcessor
-from transformers import BertTokenizer, AdamW
+from .trainer import ModelTrainer
+
+
+from transformers import BertTokenizer, AdamW, get_linear_schedule_with_warmup
 
 
 import torch
+from torch import Tensor
 from torch.optim.lr_scheduler import CyclicLR
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
@@ -24,17 +28,20 @@ logger = logging.getLogger(__name__)
 
 # Prepare model
 def get_model(num_labels):
-    BASE_PATH = "data/bert_model_files/"
+    BASE_PATH = "mltc/data/model_files/"
     config = BASE_PATH + "config.json"
-
     model_state_dict = torch.load(BASE_PATH + "pytorch_model.bin")
 
     model = BertForMultiLabelSequenceClassification.from_pretrained(
         config, num_labels=num_labels, state_dict=model_state_dict,
     )
 
+    return model
+
+
+def get_tokenizer():
     tokenizer = BertTokenizer(
-        vocab_file=BASE_PATH + "vocab.txt",
+        vocab_file="mltc/data/model_files/vocab.txt",
         do_lower_case=False,
         strip_accents=False,
         keep_accents=True,
@@ -45,7 +52,7 @@ def get_model(num_labels):
         mask_token="[MASK]",
     )
 
-    return model, tokenizer
+    return tokenizer
 
 
 def warmup_linear(x, warmup=0.002):
@@ -54,8 +61,7 @@ def warmup_linear(x, warmup=0.002):
     return 1.0 - x
 
 
-def fit(args, model):
-
+def prepare_optimizer(args, model):
     param_optimizer = list(model.named_parameters())
     no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
@@ -72,24 +78,37 @@ def fit(args, model):
             "weight_decay": 0.0,
         },
     ]
-    t_total = 0
 
     optimizer = AdamW(
-        optimizer_grouped_parameters,
-        lr=args["learning_rate"],
-        # warmup=args["warmup_proportion"],
-        # t_total=t_total,
+        optimizer_grouped_parameters, lr=args["learning_rate"], correct_bias=False
+    )
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=args["warmup_proportion"] * args["num_train_steps"],
+        num_training_steps=args["num_train_steps"],
     )
 
-    scheduler = CyclicLR(
-        optimizer, base_lr=2e-5, max_lr=5e-5, step_size_up=2500, last_epoch=0
-    )
+    # scheduler = CyclicLR(
+    #     optimizer,
+    #     base_lr=2e-5,
+    #     max_lr=5e-5,
+    #     step_size_up=2500,
+    #     last_epoch=0,
+    #     cycle_momentum=False,
+    # )
+
+    return optimizer, scheduler
+
+
+def fit(args, model, train_dataloader):
+
+    optimizer, scheduler = prepare_optimizer(args, model)
 
     device = "cpu"
 
     global_step = 0
     model.train()
-    for i_ in tqdm(range(int(args["num_epocs"])), desc="Epoch"):
+    for i_ in tqdm(range(int(args["num_train_epochs"])), desc="Epoch"):
 
         tr_loss = 0
         nb_tr_examples, nb_tr_steps = 0, 0
@@ -97,7 +116,8 @@ def fit(args, model):
 
             batch = tuple(t.to(device) for t in batch)
             input_ids, input_mask, segment_ids, label_ids = batch
-            loss = model(input_ids, segment_ids, input_mask, label_ids)
+            outputs = model(input_ids, segment_ids, input_mask, label_ids)
+            loss = outputs[0]
 
             if args["gradient_accumulation_steps"] > 1:
                 loss = loss / args["gradient_accumulation_steps"]
@@ -107,20 +127,26 @@ def fit(args, model):
             nb_tr_examples += input_ids.size(0)
             nb_tr_steps += 1
             if (step + 1) % args["gradient_accumulation_steps"] == 0:
-                scheduler.step()
                 # modify learning rate with special warm up BERT uses
                 lr_this_step = args["learning_rate"] * warmup_linear(
-                    global_step / t_total, args["warmup_proportion"]
+                    global_step / args["num_train_steps"], args["warmup_proportion"]
                 )
                 for param_group in optimizer.param_groups:
                     param_group["lr"] = lr_this_step
                 optimizer.step()
                 optimizer.zero_grad()
+                scheduler.step()
                 global_step += 1
 
         logger.info("Loss after epoc {}".format(tr_loss / nb_tr_steps))
         logger.info("Eval after epoc {}".format(i_ + 1))
-        # eval()
+
+    model_to_save = (
+        model.module if hasattr(model, "module") else model
+    )  # Only save the model it-self
+    output_model_file = "mltc/data/model_files/finetuned_pytorch_model.bin"
+    torch.save(model_to_save.state_dict(), output_model_file)
+    # eval()
 
 
 if __name__ == "__main__":
@@ -146,34 +172,18 @@ if __name__ == "__main__":
     np.random.seed(args["seed"])
     torch.manual_seed(args["seed"])
 
-    processor = MultiLabelTextProcessor("mltc/data")
-    label_codes = processor.labels
+    trainer = ModelTrainer(args, tokenizer)
+    trainer.prepare_training_data()
+    trainer.fit(args, model)
 
-    train = processor.get_train_examples()
-    test = processor.get_dev_examples()
+    label_list = trainer.processor.labels
+    num_labels = len(label_list)
 
-    label_names = [
-        "Konst, kultur och nöje",
-        "Brott, lag och rätt",
-        "Katastrofer och olyckor",
-        "Ekonomi, affärer och finans",
-        "Utbildning",
-        "Miljö och natur",
-        "Medicin och hälsa",
-        "Mänskligt",
-        "Arbete",
-        "Fritid och livsstil",
-        "Politik",
-        "Etik och religion",
-        "Teknik och vetenskap",
-        "Samhälle",
-        "Sport",
-        "Krig, konflikter och oroligheter",
-        "Väder",
-    ]
-    label_mapping = dict(zip(label_codes, label_names))
+    tokenizer = get_tokenizer()
+    model = get_model(num_labels)
+    device = "cpu"
+    model.to(device)
 
-    num_labels = len(label_codes)
-    model, tokenizer = get_model(num_labels)
-    # print(model.modules)
-    print(label_mapping)
+    logger.info("Fitting…")
+    fit(args, model, train_dataloader)
+
