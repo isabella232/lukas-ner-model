@@ -20,8 +20,8 @@ class ModelTrainer:
         self.optimizer: AdamW
         self.scheduler: LambdaLR
 
-    def prepare_training_data(self):
-        train_examples = self.processor.get_train_examples()
+    def prepare_training_data(self, file_name):
+        train_examples = self.processor.get_examples(file_name, "train")
 
         self.num_train_steps = int(
             len(train_examples)
@@ -34,7 +34,10 @@ class ModelTrainer:
             train_examples, self.args["max_seq_length"]
         )
         self.train_dataloader = self.processor.pack_features_in_dataloader(
-            train_features, self.args["local_rank"], self.args["train_batch_size"], True
+            train_features,
+            self.args["local_rank"],
+            self.args["train_batch_size"],
+            "train",
         )
 
     def warmup_linear(self, x, warmup=0.002):
@@ -97,12 +100,16 @@ class ModelTrainer:
 
                 batch = tuple(t.to(self.device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids = batch
+
+                # Forward pass
                 outputs = self.model(input_ids, segment_ids, input_mask, label_ids)
                 loss = outputs[0]
 
+                # Not used
                 if self.args["gradient_accumulation_steps"] > 1:
                     loss = loss / self.args["gradient_accumulation_steps"]
 
+                # Backward pass
                 loss.backward()
                 tr_loss += loss.item()
                 nb_tr_examples += input_ids.size(0)
@@ -127,10 +134,3 @@ class ModelTrainer:
             # self.logger.info(f"Eval after epoc {i_ + 1}")
 
         self.model.save()
-
-    def save_model(self):
-        model_to_save = (
-            self.model.module if hasattr(self.model, "module") else self.model
-        )  # Only save the model it-self
-        output_model_file = "mltc/data/model_files/finetuned_pytorch_model.bin"
-        torch.save(model_to_save.state_dict(), output_model_file)

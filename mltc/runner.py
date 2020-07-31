@@ -59,6 +59,7 @@ if __name__ == "__main__":
         "local_rank": -1,
         "seed": 1234567890,
         "gradient_accumulation_steps": 1,
+        "do_train": True,
     }
 
     random.seed(args["seed"])
@@ -70,12 +71,17 @@ if __name__ == "__main__":
     processor = MultiLabelTextProcessor("mltc/data", tokenizer, logger)
     model = get_model(len(processor.labels))
 
-    logger.info("Training…")
-    trainer = ModelTrainer(args, processor, model, logger)
-    trainer.prepare_training_data()
-    trainer.fit()
+    if args["do_train"]:
+        logger.info("Training…")
+        trainer = ModelTrainer(args, processor, model, logger)
+        trainer.prepare_training_data("train.csv")
+        trainer.fit()
 
     logger.info("Evaluating…")
     evaluator = ModelEvaluator(args, processor, model, logger)
-    evaluator.prepare_eval_data()
+    evaluator.prepare_eval_data("test.csv")
     results = evaluator.eval()
+    print(results)
+
+    # results = evaluator.predict("pred.csv")
+

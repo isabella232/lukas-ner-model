@@ -64,49 +64,14 @@ class MultiLabelTextProcessor:
             "17000000",
         ]
 
-    def get_train_examples(self, size=-1):
-        """Gets a collection of `InputExample`s for the train set."""
-        filename = "train.csv"
-        # dtype_dict = {"aid": str, "brand": str, "text": str, "categories": "category"}
-        # logger.info("LOOKING AT {}".format(os.path.join(data_dir, filename)))
-        if size == -1:
-            data_df = pd.read_csv(os.path.join(self.data_dir, filename))
-            # data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
-            return self._create_examples(data_df, "train")
-        else:
-            data_df = pd.read_csv(os.path.join(self.data_dir, filename))
-            # data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
-            return self._create_examples(data_df.sample(size), "train")
-
-    def get_dev_examples(self, size=-1):
-        """Gets a collection of `InputExample`s for the dev set."""
-        filename = "test.csv"
-        if size == -1:
-            data_df = pd.read_csv(os.path.join(self.data_dir, filename))
-            # data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
-            return self._create_examples(data_df, "dev")
-        else:
-            data_df = pd.read_csv(os.path.join(self.data_dir, filename))
-            # data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
-            return self._create_examples(data_df.sample(size), "dev")
-
-    def get_test_examples(self, data_dir, data_file_name, size=-1):
-        """Gets a collection of `InputExample`s for the dev set."""
-        data_df = pd.read_csv(os.path.join(data_dir, data_file_name))
-        #         data_df['comment_text'] = data_df['comment_text'].apply(cleanHtml)
-        if size == -1:
-            return self._create_examples(data_df, "test")
-        else:
-            return self._create_examples(data_df.sample(size), "test")
-
-    def _create_examples(self, df, set_type, labels_available=True):
+    def _create_examples(self, df, set_type):
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, row) in enumerate(df.values):
             guid = row[0]
             brand = row[1]
             text_a = row[2]
-            if labels_available:
+            if set_type != "test":
                 labels = row[3:]
             else:
                 labels = []
@@ -114,6 +79,11 @@ class MultiLabelTextProcessor:
                 InputExample(guid=guid, brand=brand, text_a=text_a, labels=labels)
             )
         return examples
+
+    def get_examples(self, file_name, set_type):
+
+        data_df = pd.read_csv(os.path.join(self.data_dir, file_name))
+        return self._create_examples(data_df, set_type)
 
     def _truncate_seq_pair(self, tokens_a, tokens_b, max_length):
         """Truncates a sequence pair in place to the maximum length."""
@@ -221,7 +191,7 @@ class MultiLabelTextProcessor:
             )
         return features
 
-    def pack_features_in_dataloader(self, features, local_rank, batch_size, train):
+    def pack_features_in_dataloader(self, features, local_rank, batch_size, set_type):
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
         all_input_mask = torch.tensor(
             [f.input_mask for f in features], dtype=torch.long
@@ -230,19 +200,24 @@ class MultiLabelTextProcessor:
             [f.segment_ids for f in features], dtype=torch.long
         )
 
-        all_label_ids = torch.tensor(
-            [f.label_ids for f in features], dtype=torch.float,
-        )
-        data = TensorDataset(
-            all_input_ids, all_input_mask, all_segment_ids, all_label_ids
-        )
+        if set_type != "test":
+            all_label_ids = torch.tensor(
+                [f.label_ids for f in features], dtype=torch.float,
+            )
+            data = TensorDataset(
+                all_input_ids, all_input_mask, all_segment_ids, all_label_ids
+            )
 
-        if not train:
+        else:
+            data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids)
+
+        if set_type != "train":
             sampler = SequentialSampler(data)
         elif local_rank == -1:
             sampler = RandomSampler(data)
         else:
             sampler = DistributedSampler(data)
+
         dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 
         return dataloader

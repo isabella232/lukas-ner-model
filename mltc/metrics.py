@@ -13,7 +13,8 @@ def accuracy_thresh(
     "Compute accuracy when `y_pred` and `y_true` are the same size."
     if sigmoid:
         y_pred = y_pred.sigmoid()
-    #     return ((y_pred>thresh)==y_true.byte()).float().mean().item()
+    # return ((y_pred>thresh)==y_true.byte()).float().mean().item()
+
     return np.mean(
         ((y_pred > thresh) == y_true.byte()).float().cpu().numpy(), axis=1
     ).sum()

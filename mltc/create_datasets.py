@@ -44,11 +44,31 @@ def transform(articles, is_mm, mapping):
     return pd.DataFrame(transformed)
 
 
-def check_distribution(df):
-    df = df.explode("categories")
+def smooth_category_distribution(tt_df, mm_df):
+    df = pd.DataFrame()
+    for code in iptc_codes:
+        tt_filt = tt_df[tt_df[code] == 1]
+        mm_filt = mm_df[mm_df[code] == 1]
+        # print(code, len(tt_filt.index), len(mm_filt.index))
+        if len(tt_filt.index) < 150:
+            mm_size = 300 - len(tt_filt.index)
+            mm_filt = mm_filt.sample(n=mm_size, random_state=seed)
+        else:
+            tt_filt = tt_filt.sample(n=150, random_state=seed)
+            mm_filt = mm_filt.sample(n=150, random_state=seed)
+        df = df.append([tt_filt, mm_filt], ignore_index=True)
+    return df
 
-    count = df.groupby("categories")["aid"].count()
-    print(count)
+
+def check_category_distribution(df):
+    for i in df.columns[3:]:
+        filt = df[df[i] == 1]
+        occurrence = filt[i].count()
+        co_occurence = filt.iloc[:, 3:].sum(axis=1) - 1
+        single_occurrance = co_occurence[co_occurence == 0].count() / occurrence
+        print(
+            f"Category {i}: total occurrence = {occurrence}, average co occurrence = {co_occurence.mean()} and share of single occurrences {single_occurrance}"
+        )
 
 
 if __name__ == "__main__":
@@ -95,32 +115,24 @@ if __name__ == "__main__":
     ]
     mapping = dict(zip(mm_codes, iptc_codes))
 
-    tt_articles = get_articles("data/input/articles_tt_new.jsonl")
+    tt_articles = get_articles("data/input/articles_tt_big.jsonl")
     mm_articles = get_articles("data/input/articles_mittmedia_10k.json")
 
     tt_df = transform(tt_articles, False, mapping)
     mm_df = transform(mm_articles, True, mapping)
 
-    df = pd.DataFrame()
-    for code in iptc_codes:
-        tt_filt = tt_df[tt_df[code] == 1]
-        mm_filt = mm_df[mm_df[code] == 1]
-        # print(code, len(tt_filt.index), len(mm_filt.index))
-        if len(tt_filt.index) < 150:
-            mm_size = 300 - len(tt_filt.index)
-            mm_filt = mm_filt.sample(n=mm_size, random_state=seed)
-        else:
-            tt_filt = tt_filt.sample(n=150, random_state=seed)
-            mm_filt = mm_filt.sample(n=150, random_state=seed)
-        df = df.append([tt_filt, mm_filt], ignore_index=True)
+    # df = smooth_category_distribution(tt_df, mm_df)
 
+    df = tt_df.append(mm_df, ignore_index=True)
     df = df.drop_duplicates(subset=["aid"])
-    # check_distribution(df)
+    check_category_distribution(df)
 
-    train = df.sample(frac=0.8, random_state=seed)
+    print(f"Number of articles {df.shape[0]}")
+
+    train = df.sample(frac=0.85, random_state=seed)
     test = df.drop(train.index)
 
-    print(train)
+    # print(train)
 
     train.to_csv("mltc/data/train.csv", index=False)
     test.to_csv("mltc/data/test.csv", index=False)
