@@ -1,4 +1,3 @@
-import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
@@ -34,16 +33,8 @@ class ModelTrainer:
             train_examples, self.args["max_seq_length"]
         )
         self.train_dataloader = self.processor.pack_features_in_dataloader(
-            train_features,
-            self.args["local_rank"],
-            self.args["train_batch_size"],
-            "train",
+            train_features, self.args["train_batch_size"], "train",
         )
-
-    def warmup_linear(self, x, warmup=0.002):
-        if x < warmup:
-            return x / warmup
-        return 1.0 - x
 
     def prepare_optimizer(self):
         param_optimizer = list(self.model.named_parameters())
@@ -76,14 +67,10 @@ class ModelTrainer:
             num_training_steps=self.num_train_steps,
         )
 
-        # scheduler = CyclicLR(
-        #     optimizer,
-        #     base_lr=2e-5,
-        #     max_lr=5e-5,
-        #     step_size_up=2500,
-        #     last_epoch=0,
-        #     cycle_momentum=False,
-        # )
+    def warmup_linear(self, x, warmup=0.002):
+        if x < warmup:
+            return x / warmup
+        return 1.0 - x
 
     def fit(self):
         self.model.to(self.device)
@@ -97,35 +84,41 @@ class ModelTrainer:
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
             for step, batch in enumerate(tqdm(self.train_dataloader, desc="Iteration")):
+                # Set gradients of model parameters to zero
+                self.optimizer.zero_grad()
 
                 batch = tuple(t.to(self.device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids = batch
 
-                # Forward pass
+                # Forward pass, compute loss for prediction
                 outputs = self.model(input_ids, segment_ids, input_mask, label_ids)
                 loss = outputs[0]
 
-                # Not used
+                # If gradient accumulation is used
                 if self.args["gradient_accumulation_steps"] > 1:
                     loss = loss / self.args["gradient_accumulation_steps"]
 
-                # Backward pass
+                # Backward pass, compute gradient of loss
                 loss.backward()
                 tr_loss += loss.item()
+
                 nb_tr_examples += input_ids.size(0)
                 nb_tr_steps += 1
                 if (step + 1) % self.args["gradient_accumulation_steps"] == 0:
-                    # modify learning rate with special warm up BERT uses
+                    # Update learning rate with the special warmup that BERT uses
                     lr_this_step = self.args["learning_rate"] * self.warmup_linear(
                         global_step / self.num_train_steps,
                         self.args["warmup_proportion"],
                     )
                     for param_group in self.optimizer.param_groups:
                         param_group["lr"] = lr_this_step
+
+                    # Update model parameters
                     self.optimizer.step()
-                    self.optimizer.zero_grad()
-                    self.scheduler.step()
                     global_step += 1
+
+            # Schedule (update) learning rate for next epoch
+            self.scheduler.step()
 
             self.logger.info(f"Loss after epoch {i_+1}: {tr_loss / nb_tr_steps}")
             self.logger.info(

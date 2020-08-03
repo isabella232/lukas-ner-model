@@ -26,10 +26,10 @@ class ModelEvaluator:
             eval_examples, self.args["max_seq_length"]
         )
         self.eval_dataloader = self.processor.pack_features_in_dataloader(
-            eval_features, self.args["local_rank"], self.args["eval_batch_size"], "eval"
+            eval_features, self.args["eval_batch_size"], "eval"
         )
 
-    def eval(self):
+    def evaluate(self):
         all_logits = None
         all_labels = None
 
@@ -113,7 +113,7 @@ class ModelEvaluator:
             test_examples, self.args["max_seq_length"]
         )
         test_dataloader = self.processor.pack_features_in_dataloader(
-            test_features, self.args["local_rank"], self.args["eval_batch_size"], "test"
+            test_features, self.args["eval_batch_size"], "test"
         )
 
         # Hold input data for returning it

@@ -56,7 +56,6 @@ if __name__ == "__main__":
         "learning_rate": 3e-5,
         "num_train_epochs": 4.0,
         "warmup_proportion": 0.1,
-        "local_rank": -1,
         "seed": 1234567890,
         "gradient_accumulation_steps": 1,
         "do_train": True,
@@ -80,7 +79,7 @@ if __name__ == "__main__":
     logger.info("Evaluating…")
     evaluator = ModelEvaluator(args, processor, model, logger)
     evaluator.prepare_eval_data("test.csv")
-    results = evaluator.eval()
+    results = evaluator.evaluate()
     print(results)
 
     # results = evaluator.predict("pred.csv")

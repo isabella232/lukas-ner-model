@@ -191,7 +191,7 @@ class MultiLabelTextProcessor:
             )
         return features
 
-    def pack_features_in_dataloader(self, features, local_rank, batch_size, set_type):
+    def pack_features_in_dataloader(self, features, batch_size, set_type):
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
         all_input_mask = torch.tensor(
             [f.input_mask for f in features], dtype=torch.long
@@ -213,8 +213,6 @@ class MultiLabelTextProcessor:
 
         if set_type != "train":
             sampler = SequentialSampler(data)
-        elif local_rank == -1:
-            sampler = RandomSampler(data)
         else:
             sampler = DistributedSampler(data)
 

@@ -64,11 +64,12 @@ def check_category_distribution(df):
     for i in df.columns[3:]:
         filt = df[df[i] == 1]
         occurrence = filt[i].count()
-        co_occurence = filt.iloc[:, 3:].sum(axis=1) - 1
-        single_occurrance = co_occurence[co_occurence == 0].count() / occurrence
+        co_occurrence = filt.iloc[:, 3:].sum(axis=1) - 1
+        single_occurrence = co_occurrence[co_occurrence == 0].count()
         print(
-            f"Category {i}: total occurrence = {occurrence}, average co occurrence = {co_occurence.mean()} and share of single occurrences {single_occurrance}"
+            f"Category {i}: total occurrence = {occurrence}, average co occurrence = {co_occurrence.mean()} and share of single occurrences {single_occurrence}"
         )
+        print(yes)
 
 
 if __name__ == "__main__":
