@@ -44,6 +44,39 @@ def transform(articles, is_mm, mapping):
     return pd.DataFrame(transformed)
 
 
+def transform_culture(articles, is_mm, mapping):
+    transformed = []
+
+    for article in articles:
+        aid = article["id"]
+        categories = dict(zip(list(mapping.values()), [0] * len(mapping)))
+
+        if is_mm:
+            brand = "MM"
+            text = article["content_text"]
+            if re.search("<.*>", text):
+                continue
+
+            for tag in article["tags"]:
+                category = tag["category"]
+                if category.startswith("RYF-") and len(category) == 7:
+                    categories[mapping[category]] = 1
+
+        else:
+            brand = "TT"
+            text = article["text"]
+            for category in article["categories"]:
+                if category[0].endswith("000000"):
+                    categories[category[0]] = 1
+
+        if not text:
+            continue
+
+        transformed += [{"aid": aid, "brand": brand, "text": text, **categories}]
+
+    return pd.DataFrame(transformed)
+
+
 def smooth_category_distribution(tt_df, mm_df):
     df = pd.DataFrame()
     for code in iptc_codes:
@@ -65,11 +98,10 @@ def check_category_distribution(df):
         filt = df[df[i] == 1]
         occurrence = filt[i].count()
         co_occurrence = filt.iloc[:, 3:].sum(axis=1) - 1
-        single_occurrence = co_occurrence[co_occurrence == 0].count()
+        single_occurrence = co_occurrence[co_occurrence == 0].count() / occurrence
         print(
             f"Category {i}: total occurrence = {occurrence}, average co occurrence = {co_occurrence.mean()} and share of single occurrences {single_occurrence}"
         )
-        print(yes)
 
 
 if __name__ == "__main__":
@@ -115,6 +147,17 @@ if __name__ == "__main__":
         "RYF-WHZ",
     ]
     mapping = dict(zip(mm_codes, iptc_codes))
+
+    iptc_culture = ["20000005", "20000013", "20000018", "20000029", "20000051"]
+    mm_culture = [
+        "RYF-XKI-JIJ",
+        "RYF-XKI-YFJ",
+        "RYF-XKI-FEY",
+        "RYF-XKI-GJH",
+        "RYF-XKI-BUS",
+    ]
+
+    culture_mapping = dict(zip(iptc_culture, mm_culture))
 
     tt_articles = get_articles("data/input/articles_tt_big.jsonl")
     mm_articles = get_articles("data/input/articles_mittmedia_10k.json")

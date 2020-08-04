@@ -79,16 +79,17 @@ class ModelTrainer:
 
         global_step = 0
         self.model.train()
-        for i_ in tqdm(range(int(self.args["num_train_epochs"])), desc="Epoch"):
 
+        for i_ in tqdm(range(int(self.args["num_train_epochs"])), desc="Epoch"):
             tr_loss = 0
             nb_tr_examples, nb_tr_steps = 0, 0
-            for step, batch in enumerate(tqdm(self.train_dataloader, desc="Iteration")):
-                # Set gradients of model parameters to zero
-                self.optimizer.zero_grad()
 
+            for step, batch in enumerate(tqdm(self.train_dataloader, desc="Iteration")):
                 batch = tuple(t.to(self.device) for t in batch)
                 input_ids, input_mask, segment_ids, label_ids = batch
+
+                # Set gradients of model parameters to zero
+                self.optimizer.zero_grad()
 
                 # Forward pass, compute loss for prediction
                 outputs = self.model(input_ids, segment_ids, input_mask, label_ids)
@@ -98,14 +99,15 @@ class ModelTrainer:
                 if self.args["gradient_accumulation_steps"] > 1:
                     loss = loss / self.args["gradient_accumulation_steps"]
 
-                # Backward pass, compute gradient of loss
+                # Backward pass, compute gradient of loss w.r.t. model parameters
                 loss.backward()
                 tr_loss += loss.item()
 
                 nb_tr_examples += input_ids.size(0)
                 nb_tr_steps += 1
+
                 if (step + 1) % self.args["gradient_accumulation_steps"] == 0:
-                    # Update learning rate with the special warmup that BERT uses
+                    # Update (increase) learning rate linearly during warmup period
                     lr_this_step = self.args["learning_rate"] * self.warmup_linear(
                         global_step / self.num_train_steps,
                         self.args["warmup_proportion"],

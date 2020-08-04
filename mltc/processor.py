@@ -4,7 +4,6 @@ import pandas as pd
 
 import torch
 from torch.utils.data import TensorDataset, DataLoader, RandomSampler, SequentialSampler
-from torch.utils.data.distributed import DistributedSampler
 
 
 class InputExample(object):
@@ -40,29 +39,13 @@ class InputFeatures(object):
 
 
 class MultiLabelTextProcessor:
-    def __init__(self, data_dir, tokenizer, logger):
-        self.data_dir = data_dir
+    def __init__(self, tokenizer, logger, labels):
         self.tokenizer = tokenizer
         self.logger = logger
-        self.labels = [
-            "01000000",
-            "02000000",
-            "03000000",
-            "04000000",
-            "05000000",
-            "06000000",
-            "07000000",
-            "08000000",
-            "09000000",
-            "10000000",
-            "11000000",
-            "12000000",
-            "13000000",
-            "14000000",
-            "15000000",
-            "16000000",
-            "17000000",
-        ]
+
+        self.data_dir = "mltc/data/datasets"
+        with open("mltc/data/labels/" + labels, "r") as f:
+            self.labels = f.read().splitlines()
 
     def _create_examples(self, df, set_type):
         """Creates examples for the training and dev sets."""
@@ -81,11 +64,12 @@ class MultiLabelTextProcessor:
         return examples
 
     def get_examples(self, file_name, set_type):
-
         data_df = pd.read_csv(os.path.join(self.data_dir, file_name))
         return self._create_examples(data_df, set_type)
 
-    def _truncate_seq_pair(self, tokens_a, tokens_b, max_length):
+    # The two functions below are heavily inspired by their counterparts in:
+    # https://github.com/google-research/bert/blob/master/extract_features.py
+    def _truncate_seq_pair(tokens_a, tokens_b, max_length):
         """Truncates a sequence pair in place to the maximum length."""
 
         # This is a simple heuristic which will always truncate the longer sequence
@@ -214,7 +198,7 @@ class MultiLabelTextProcessor:
         if set_type != "train":
             sampler = SequentialSampler(data)
         else:
-            sampler = DistributedSampler(data)
+            sampler = RandomSampler(data)
 
         dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 

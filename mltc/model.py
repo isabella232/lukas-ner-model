@@ -97,6 +97,6 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
     def save(self):
         model_to_save = (
             self.module if hasattr(self, "module") else self
-        )  # Only save the model it-self
+        )  # Only save the model itself
         output_model_file = "mltc/data/model_files/finetuned_pytorch_model.bin"
         torch.save(model_to_save.state_dict(), output_model_file)

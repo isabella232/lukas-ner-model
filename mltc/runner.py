@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def get_model(num_labels):
     BASE_PATH = "mltc/data/model_files/"
     config = BASE_PATH + "config.json"
-    model_state_dict = torch.load(BASE_PATH + "pytorch_model.bin")
+    model_state_dict = torch.load(BASE_PATH + "finetuned_200803_pytorch_model.bin")
 
     model = BertForMultiLabelSequenceClassification.from_pretrained(
         config, num_labels=num_labels, state_dict=model_state_dict,
@@ -51,23 +51,23 @@ def get_tokenizer():
 if __name__ == "__main__":
     args = {
         "max_seq_length": 512,
+        "num_train_epochs": 4.0,
         "train_batch_size": 32,
         "eval_batch_size": 32,
         "learning_rate": 3e-5,
-        "num_train_epochs": 4.0,
         "warmup_proportion": 0.1,
-        "seed": 1234567890,
         "gradient_accumulation_steps": 1,
-        "do_train": True,
+        "seed": 1234567890,
+        "do_train": False,
     }
 
     random.seed(args["seed"])
     np.random.seed(args["seed"])
     torch.manual_seed(args["seed"])
 
-    logger.info("Initialization…")
+    logger.info("Initializing…")
     tokenizer = get_tokenizer()
-    processor = MultiLabelTextProcessor("mltc/data", tokenizer, logger)
+    processor = MultiLabelTextProcessor(tokenizer, logger, "top_categories.txt")
     model = get_model(len(processor.labels))
 
     if args["do_train"]:
@@ -78,9 +78,8 @@ if __name__ == "__main__":
 
     logger.info("Evaluating…")
     evaluator = ModelEvaluator(args, processor, model, logger)
-    evaluator.prepare_eval_data("test.csv")
+    evaluator.prepare_eval_data("eval_small.csv")
     results = evaluator.evaluate()
     print(results)
 
-    # results = evaluator.predict("pred.csv")
-
+    # results = evaluator.predict("test.csv")

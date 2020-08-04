@@ -1,10 +1,13 @@
 import numpy as np
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import (
+    roc_curve,
+    auc,
+)
 
 import torch
 from torch.utils.data import DataLoader
 
-from .metrics import accuracy, accuracy_thresh, fbeta
+from .metrics import accuracy, accuracy_thresh, fbeta, pairwise_confusion_matrix
 
 import pandas as pd
 from tqdm import tqdm
@@ -34,22 +37,24 @@ class ModelEvaluator:
         all_labels = None
 
         self.model.eval()
-        eval_loss, eval_accuracy = 0, 0
+        eval_loss, eval_accuracy, eval_f1, eval_prec, eval_rec = 0, 0, 0, 0, 0
         nb_eval_steps, nb_eval_examples = 0, 0
-        for input_ids, input_mask, segment_ids, label_ids in self.eval_dataloader:
-            input_ids = input_ids.to(self.device)
-            input_mask = input_mask.to(self.device)
-            segment_ids = segment_ids.to(self.device)
-            label_ids = label_ids.to(self.device)
+        for batch in self.eval_dataloader:
+            batch = tuple(t.to(self.device) for t in batch)
+            input_ids, input_mask, segment_ids, label_ids = batch
 
             with torch.no_grad():
                 outputs = self.model(input_ids, segment_ids, input_mask, label_ids)
                 tmp_eval_loss, logits = outputs[:2]
 
-            # logits = logits.detach().cpu().numpy()
-            # label_ids = label_ids.to('cpu').numpy()
-            # tmp_eval_accuracy = accuracy(logits, label_ids)
             tmp_eval_accuracy = accuracy_thresh(logits, label_ids)
+            eval_loss += tmp_eval_loss.mean().item()
+            eval_accuracy += tmp_eval_accuracy
+            f1, prec, rec = fbeta(logits, label_ids)
+            eval_f1 += f1
+            eval_prec += prec
+            eval_rec += rec
+
             if all_logits is None:
                 all_logits = logits.detach().cpu().numpy()
             else:
@@ -64,24 +69,32 @@ class ModelEvaluator:
                     (all_labels, label_ids.detach().cpu().numpy()), axis=0
                 )
 
-            eval_loss += tmp_eval_loss.mean().item()
-            eval_accuracy += tmp_eval_accuracy
-
             nb_eval_examples += input_ids.size(0)
             nb_eval_steps += 1
 
         eval_loss = eval_loss / nb_eval_steps
         eval_accuracy = eval_accuracy / nb_eval_examples
+        eval_f1 = eval_f1 / nb_eval_examples
+        eval_prec = eval_prec / nb_eval_examples
+        eval_rec = eval_rec / nb_eval_examples
 
         # ROC-AUC calcualation
         # Compute ROC curve and ROC area for each class
         fpr = dict()
         tpr = dict()
         roc_auc = dict()
+        confusion_matrices = []
 
         for i in range(len(self.processor.labels)):
             fpr[i], tpr[i], _ = roc_curve(all_labels[:, i], all_logits[:, i])
             roc_auc[i] = auc(fpr[i], tpr[i])
+
+            print(13, i)
+            confusion_matrices += [
+                pairwise_confusion_matrix(
+                    all_logits[:, [13, i]], all_labels[:, [13, i]]
+                )
+            ]
 
         # Compute micro-average ROC curve and ROC area
         fpr["micro"], tpr["micro"], _ = roc_curve(
@@ -92,15 +105,18 @@ class ModelEvaluator:
         result = {
             "eval_loss": eval_loss,
             "eval_accuracy": eval_accuracy,
-            # 'loss': tr_loss/nb_tr_steps,
             "roc_auc": roc_auc,
+            "eval_f1": eval_f1,
+            "eval_prec": eval_prec,
+            "eval_rec": eval_rec,
+            # "confusion_matrices": confusion_matrices,
         }
 
-        self.save_result(result)
+        # self.save_result(result) #TODO save this
         return result
 
     def save_result(self, result):
-        output_eval_file = "mltc/data/eval_results.txt"
+        output_eval_file = "mltc/data/results/eval_results.txt"
         with open(output_eval_file, "w") as writer:
             self.logger.info("***** Eval results *****")
             for key in sorted(result.keys()):
@@ -133,10 +149,8 @@ class ModelEvaluator:
         for step, batch in enumerate(
             tqdm(test_dataloader, desc="Prediction Iteration")
         ):
+            batch = tuple(t.to(self.device) for t in batch)
             input_ids, input_mask, segment_ids = batch
-            input_ids = input_ids.to(self.device)
-            input_mask = input_mask.to(self.device)
-            segment_ids = segment_ids.to(self.device)
 
             with torch.no_grad():
                 outputs = self.model(input_ids, segment_ids, input_mask)
