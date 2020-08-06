@@ -1,7 +1,7 @@
-from transformers import BertForSequenceClassification, BertModel
+from transformers import BertForSequenceClassification, BertModel, BertLayer
 
 import torch
-from torch.nn import BCEWithLogitsLoss
+from torch.nn import Dropout, Linear, BCEWithLogitsLoss
 
 
 class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
@@ -47,8 +47,8 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
         super(BertForMultiLabelSequenceClassification, self).__init__(config)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
-        self.dropout = torch.nn.Dropout(config.hidden_dropout_prob)
-        self.classifier = torch.nn.Linear(config.hidden_size, config.num_labels)
+        self.dropout = Dropout(config.hidden_dropout_prob)
+        self.classifier = Linear(config.hidden_size, config.num_labels)
         self.apply(self._init_weights)
 
     def forward(
@@ -87,11 +87,11 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
         return outputs  # (loss), logits, (hidden_states), (attentions)
 
     def freeze_bert_encoder(self):
-        for param in self.bert.parameters():
+        for param in self.bert.encoder.parameters():
             param.requires_grad = False
 
     def unfreeze_bert_encoder(self):
-        for param in self.bert.parameters():
+        for param in self.bert.encoder.parameters():
             param.requires_grad = True
 
     def save(self):
@@ -100,3 +100,12 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
         )  # Only save the model itself
         output_model_file = "mltc/data/model_files/finetuned_pytorch_model.bin"
         torch.save(model_to_save.state_dict(), output_model_file)
+
+
+class SubModel(BertForMultiLabelSequenceClassification):
+    def __init__(self, config, num_labels=2):
+        super(SubModel, self).__init__(config)
+        self.bert = BertModel(config)
+        self.freeze_bert_encoder()
+        self.bert.encoder.add_module("12", BertLayer(config))
+        self.apply(self._init_weights)

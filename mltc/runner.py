@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from transformers import BertTokenizer
 
-from .model import BertForMultiLabelSequenceClassification
+from .model import BertForMultiLabelSequenceClassification, SubModel
 from .processor import MultiLabelTextProcessor
 from .trainer import ModelTrainer
 from .evaluator import ModelEvaluator
@@ -20,14 +20,31 @@ logger = logging.getLogger(__name__)
 
 
 # Prepare model
-def get_model(num_labels):
+def get_base_model(num_labels):
     BASE_PATH = "mltc/data/model_files/"
     config = BASE_PATH + "config.json"
-    model_state_dict = torch.load(BASE_PATH + "finetuned_200803_pytorch_model.bin")
+    model_state_dict = torch.load(BASE_PATH + "pytorch_model.bin")
 
     model = BertForMultiLabelSequenceClassification.from_pretrained(
         config, num_labels=num_labels, state_dict=model_state_dict,
     )
+
+    return model
+
+
+def get_specialized_model(num_labels):
+    BASE_PATH = "mltc/data/model_files/"
+    config = BASE_PATH + "config.json"
+    model_state_dict = torch.load(BASE_PATH + "finetuned_200803_pytorch_model.bin")
+    del model_state_dict["classifier.weight"]
+    del model_state_dict["classifier.bias"]
+
+    model = SubModel.from_pretrained(
+        config, num_labels=num_labels, state_dict=model_state_dict
+    )
+
+    print(model.modules)
+    [print(name, param.requires_grad) for name, param in model.named_parameters()]
 
     return model
 
@@ -58,7 +75,7 @@ if __name__ == "__main__":
         "warmup_proportion": 0.1,
         "gradient_accumulation_steps": 1,
         "seed": 1234567890,
-        "do_train": False,
+        "do_train": True,
     }
 
     random.seed(args["seed"])
@@ -68,7 +85,7 @@ if __name__ == "__main__":
     logger.info("Initializing…")
     tokenizer = get_tokenizer()
     processor = MultiLabelTextProcessor(tokenizer, logger, "top_categories.txt")
-    model = get_model(len(processor.labels))
+    model = get_base_model(len(processor.labels))
 
     if args["do_train"]:
         logger.info("Training…")
@@ -78,7 +95,7 @@ if __name__ == "__main__":
 
     logger.info("Evaluating…")
     evaluator = ModelEvaluator(args, processor, model, logger)
-    evaluator.prepare_eval_data("eval_small.csv")
+    evaluator.prepare_eval_data("eval.csv")
     results = evaluator.evaluate()
     print(results)
 

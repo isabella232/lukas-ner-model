@@ -128,4 +128,4 @@ class ModelTrainer:
             )
             # self.logger.info(f"Eval after epoc {i_ + 1}")
 
-        self.model.save()
+        self.model.save()  # TODO: save
