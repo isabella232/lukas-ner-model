@@ -26,7 +26,7 @@ def fbeta(
     y_pred: Tensor,
     y_true: Tensor,
     thresh: float = 0.5,
-    beta: float = 2,
+    beta: float = 1,
     eps: float = 1e-9,
     sigmoid: bool = True,
 ):
@@ -82,5 +82,5 @@ def pairwise_confusion_matrix(y_pred, y_true):
     # print(y_pred)
 
     matrix = confusion_matrix(y_true, y_pred, labels=[True, False])
-    print(matrix)
+
     return matrix

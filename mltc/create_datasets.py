@@ -156,8 +156,8 @@ if __name__ == "__main__":
         "Väder",
     ]
 
-    tt_articles = get_articles("data/input/articles_tt_big.jsonl")
-    mm_articles = get_articles("data/input/articles_mittmedia_10k.json")
+    tt_articles = get_articles("data/input/articles_tt_culture.jsonl")
+    mm_articles = get_articles("data/input/articles_mittmedia_culture.json")
 
     is_top = False
     iptc_codes, mm_codes, mapping, cat_dict = get_category_codes(is_top)

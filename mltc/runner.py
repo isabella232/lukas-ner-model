@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from transformers import BertTokenizer
 
-from .model import BertForMultiLabelSequenceClassification, SubModel
+from .models import BertForMultiLabelSequenceClassification, SubModel
 from .processor import MultiLabelTextProcessor
 from .trainer import ModelTrainer
 from .evaluator import ModelEvaluator
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def get_base_model(num_labels):
     BASE_PATH = "mltc/data/model_files/"
     config = BASE_PATH + "config.json"
-    model_state_dict = torch.load(BASE_PATH + "pytorch_model.bin")
+    model_state_dict = torch.load(BASE_PATH + "finetuned_200803_pytorch_model.bin")
 
     model = BertForMultiLabelSequenceClassification.from_pretrained(
         config, num_labels=num_labels, state_dict=model_state_dict,
@@ -84,18 +84,18 @@ if __name__ == "__main__":
 
     logger.info("Initializing…")
     tokenizer = get_tokenizer()
-    processor = MultiLabelTextProcessor(tokenizer, logger, "top_categories.txt")
-    model = get_base_model(len(processor.labels))
+    processor = MultiLabelTextProcessor(tokenizer, logger, "culture_categories.txt")
+    model = get_specialized_model(len(processor.labels))
 
     if args["do_train"]:
         logger.info("Training…")
         trainer = ModelTrainer(args, processor, model, logger)
-        trainer.prepare_training_data("train.csv")
+        trainer.prepare_training_data("train_culture.csv")
         trainer.fit()
 
     logger.info("Evaluating…")
     evaluator = ModelEvaluator(args, processor, model, logger)
-    evaluator.prepare_eval_data("eval.csv")
+    evaluator.prepare_eval_data("eval_culture.csv")
     results = evaluator.evaluate()
     print(results)
 

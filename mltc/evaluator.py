@@ -7,7 +7,7 @@ from sklearn.metrics import (
 import torch
 from torch.utils.data import DataLoader
 
-from .metrics import accuracy, accuracy_thresh, fbeta, pairwise_confusion_matrix
+from .metrics import accuracy_thresh, fbeta, pairwise_confusion_matrix
 
 import pandas as pd
 from tqdm import tqdm
@@ -74,9 +74,9 @@ class ModelEvaluator:
 
         eval_loss = eval_loss / nb_eval_steps
         eval_accuracy = eval_accuracy / nb_eval_examples
-        eval_f1 = eval_f1 / nb_eval_examples
-        eval_prec = eval_prec / nb_eval_examples
-        eval_rec = eval_rec / nb_eval_examples
+        eval_f1 = eval_f1 / nb_eval_steps
+        eval_prec = eval_prec / nb_eval_steps
+        eval_rec = eval_rec / nb_eval_steps
 
         # ROC-AUC calcualation
         # Compute ROC curve and ROC area for each class
@@ -89,7 +89,6 @@ class ModelEvaluator:
             fpr[i], tpr[i], _ = roc_curve(all_labels[:, i], all_logits[:, i])
             roc_auc[i] = auc(fpr[i], tpr[i])
 
-            print(13, i)
             confusion_matrices += [
                 pairwise_confusion_matrix(
                     all_logits[:, [13, i]], all_labels[:, [13, i]]
@@ -112,7 +111,7 @@ class ModelEvaluator:
             # "confusion_matrices": confusion_matrices,
         }
 
-        # self.save_result(result) #TODO save this
+        self.save_result(result)
         return result
 
     def save_result(self, result):
