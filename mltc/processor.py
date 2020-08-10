@@ -9,7 +9,9 @@ from torch.utils.data import TensorDataset, DataLoader, RandomSampler, Sequentia
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
 
-    def __init__(self, guid, brand, text_a, text_b=None, labels=None):
+    def __init__(
+        self, guid, text_a, text_b=None, labels=None, brand=None, parent_labels=None
+    ):
         """Constructs a InputExample.
 
         Args:
@@ -22,23 +24,29 @@ class InputExample(object):
             specified for train and dev examples, but not for test examples.
         """
         self.guid = guid
-        self.brand = brand
         self.text_a = text_a
-        self.text_b = text_b
+        self.text_b = text_b  # Not used
         self.labels = labels
+        self.brand = brand  # Not used, but could be of interest later on
+        self.parent_labels = parent_labels
 
 
 class InputFeatures(object):
     """A single set of features of data."""
 
-    def __init__(self, input_ids, input_mask, segment_ids, label_ids):
+    def __init__(
+        self, input_ids, input_mask, segment_ids, label_ids, parent_labels=None
+    ):
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.segment_ids = segment_ids
         self.label_ids = label_ids
+        self.parent_labels = parent_labels
 
 
 class MultiLabelTextProcessor:
+    """Class for processing and transforming data to be used as input to the classifiers."""
+
     def __init__(self, tokenizer, logger, labels):
         self.tokenizer = tokenizer
         self.logger = logger
@@ -47,7 +55,7 @@ class MultiLabelTextProcessor:
         with open("mltc/data/labels/" + labels, "r") as f:
             self.labels = f.read().splitlines()
 
-    def _create_examples(self, df, set_type):
+    def _create_examples(self, df, set_type, parent_labels_df=None):
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, row) in enumerate(df.values):
@@ -58,14 +66,31 @@ class MultiLabelTextProcessor:
                 labels = row[3:]
             else:
                 labels = []
-            examples.append(
-                InputExample(guid=guid, brand=brand, text_a=text_a, labels=labels)
-            )
+
+            if parent_labels_df is not None:
+                parent_labels = parent_labels_df.iloc[i, 1:].values.tolist()
+                input_example = InputExample(
+                    guid=guid,
+                    brand=brand,
+                    text_a=text_a,
+                    labels=labels,
+                    parent_labels=parent_labels,
+                )
+            else:
+                input_example = InputExample(
+                    guid=guid, brand=brand, text_a=text_a, labels=labels
+                )
+            examples.append(input_example)
         return examples
 
-    def get_examples(self, file_name, set_type):
+    def get_examples(self, file_name, set_type, parent_labels=None):
+        """Gets input data from CSV file and loads it in a Pandas DataFrame."""
         data_df = pd.read_csv(os.path.join(self.data_dir, file_name))
-        return self._create_examples(data_df, set_type)
+        if parent_labels:
+            parent_labels_df = pd.read_csv(os.path.join(self.data_dir, parent_labels))
+            return self._create_examples(data_df, set_type, parent_labels_df)
+        else:
+            return self._create_examples(data_df, set_type)
 
     # The two functions below are heavily inspired by their counterparts in:
     # https://github.com/google-research/bert/blob/master/extract_features.py
@@ -87,8 +112,6 @@ class MultiLabelTextProcessor:
 
     def convert_examples_to_features(self, examples, max_seq_length):
         """Loads a data file into a list of `InputBatch`s."""
-        # label_map = {label: i for i, label in enumerate(self.labels)}
-
         features = []
         for (ex_index, example) in enumerate(examples):
             tokens_a = self.tokenizer.tokenize(example.text_a)
@@ -149,7 +172,7 @@ class MultiLabelTextProcessor:
             labels_ids = []
             for label in example.labels:
                 labels_ids.append(float(label))
-            # label_id = label_map[example.label]
+
             if ex_index < 0:
                 self.logger.info("*** Example ***")
                 self.logger.info("guid: %s" % (example.guid))
@@ -165,17 +188,27 @@ class MultiLabelTextProcessor:
                 )
                 self.logger.info("label: %s (id = %s)" % (example.labels, labels_ids))
 
-            features.append(
-                InputFeatures(
+            if example.parent_labels is None:
+                input_features = InputFeatures(
                     input_ids=input_ids,
                     input_mask=input_mask,
                     segment_ids=segment_ids,
                     label_ids=labels_ids,
                 )
-            )
+            else:
+                input_features = InputFeatures(
+                    input_ids=input_ids,
+                    input_mask=input_mask,
+                    segment_ids=segment_ids,
+                    label_ids=labels_ids,
+                    parent_labels=example.parent_labels,
+                )
+            features.append(input_features)
+
         return features
 
     def pack_features_in_dataloader(self, features, batch_size, set_type):
+        """Transforms input features to tensors and packs them in a PyTorch Dataloader."""
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
         all_input_mask = torch.tensor(
             [f.input_mask for f in features], dtype=torch.long
@@ -184,22 +217,32 @@ class MultiLabelTextProcessor:
             [f.segment_ids for f in features], dtype=torch.long
         )
 
+        all_parent_labels = torch.zeros(len(features), dtype=torch.bool)
+        parent_labels = [f.parent_labels for f in features]
+        if any(parent_labels):
+            all_parent_labels = torch.tensor(parent_labels, dtype=torch.float)
+
         if set_type != "test":
             all_label_ids = torch.tensor(
                 [f.label_ids for f in features], dtype=torch.float,
             )
             data = TensorDataset(
-                all_input_ids, all_input_mask, all_segment_ids, all_label_ids
+                all_input_ids,
+                all_input_mask,
+                all_segment_ids,
+                all_label_ids,
+                all_parent_labels,
             )
 
         else:
-            data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids)
+            data = TensorDataset(
+                all_input_ids, all_input_mask, all_segment_ids, all_parent_labels
+            )
 
         if set_type != "train":
             sampler = SequentialSampler(data)
         else:
             sampler = RandomSampler(data)
-
         dataloader = DataLoader(data, sampler=sampler, batch_size=batch_size)
 
         return dataloader

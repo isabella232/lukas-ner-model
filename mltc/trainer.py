@@ -1,11 +1,16 @@
+import torch
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import DataLoader
 
 from transformers import AdamW, get_linear_schedule_with_warmup
 from tqdm import tqdm
 
+from .models import BertForMultilabelSpecialized
+
 
 class ModelTrainer:
+    """Class for training a classifier."""
+
     def __init__(self, args, processor, model, logger):
         self.args = args
         self.processor = processor
@@ -19,25 +24,34 @@ class ModelTrainer:
         self.optimizer: AdamW
         self.scheduler: LambdaLR
 
-    def prepare_training_data(self, file_name):
-        train_examples = self.processor.get_examples(file_name, "train")
+    def prepare_training_data(self, file_name, parent_labels=None):
+        """Creates a PyTorch Dataloader from a CSV file, which is used
+        as input to the classifiers.
+        """
+        train_examples = self.processor.get_examples(file_name, "train", parent_labels)
 
         self.num_train_steps = int(
             len(train_examples)
             / self.args["train_batch_size"]
-            / self.args["gradient_accumulation_steps"]
             * self.args["num_train_epochs"]
         )
 
         train_features = self.processor.convert_examples_to_features(
-            train_examples, self.args["max_seq_length"]
+            train_examples, self.args["max_seq_length"],
         )
         self.train_dataloader = self.processor.pack_features_in_dataloader(
             train_features, self.args["train_batch_size"], "train",
         )
 
-    def prepare_optimizer(self):
-        param_optimizer = list(self.model.named_parameters())
+    def load_optimizer(self):
+        """Loads the AdamW optimizer used during training."""
+        # Pass only the last 20 parameters to the optimizer, i.e. those that are not freezed
+        if type(self.model) == BertForMultilabelSpecialized:
+            param_optimizer = list(self.model.named_parameters())[-20:]
+        else:
+            param_optimizer = list(self.model.named_parameters())
+
+        # Weight decay denotes the lambda in an L2 penalty added to the loss
         no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
             {
@@ -60,72 +74,57 @@ class ModelTrainer:
             correct_bias=False,
         )
 
-    def prepare_scheduler(self):
+    def load_scheduler(self):
+        """Loads the scheduler which controls the learning rate during training."""
         self.scheduler = get_linear_schedule_with_warmup(
             self.optimizer,
             num_warmup_steps=self.args["warmup_proportion"] * self.num_train_steps,
             num_training_steps=self.num_train_steps,
         )
 
-    def warmup_linear(self, x, warmup=0.002):
-        if x < warmup:
-            return x / warmup
-        return 1.0 - x
-
-    def fit(self):
+    def train(self):
+        """Performs model training using labeled data."""
         self.model.to(self.device)
-        self.prepare_optimizer()
-        self.prepare_scheduler()
+        self.load_optimizer()
+        self.load_scheduler()
 
         global_step = 0
         self.model.train()
 
         for i_ in tqdm(range(int(self.args["num_train_epochs"])), desc="Epoch"):
-            tr_loss = 0
-            nb_tr_examples, nb_tr_steps = 0, 0
+            tr_loss, nb_tr_steps = 0, 0
 
             for step, batch in enumerate(tqdm(self.train_dataloader, desc="Iteration")):
                 batch = tuple(t.to(self.device) for t in batch)
-                input_ids, input_mask, segment_ids, label_ids = batch
-
-                # Set gradients of model parameters to zero
-                self.optimizer.zero_grad()
+                input_ids, input_mask, segment_ids, label_ids, parent_labels = batch
 
                 # Forward pass, compute loss for prediction
-                outputs = self.model(input_ids, segment_ids, input_mask, label_ids)
+                # parent_labels is boolean type if there are no parent labels
+                if parent_labels.dtype != torch.bool:
+                    outputs = self.model(
+                        input_ids,
+                        segment_ids,
+                        input_mask,
+                        label_ids,
+                        parent_labels=parent_labels,
+                    )
+                else:
+                    outputs = self.model(input_ids, segment_ids, input_mask, label_ids)
                 loss = outputs[0]
-
-                # If gradient accumulation is used
-                if self.args["gradient_accumulation_steps"] > 1:
-                    loss = loss / self.args["gradient_accumulation_steps"]
 
                 # Backward pass, compute gradient of loss w.r.t. model parameters
                 loss.backward()
                 tr_loss += loss.item()
-
-                nb_tr_examples += input_ids.size(0)
                 nb_tr_steps += 1
 
-                if (step + 1) % self.args["gradient_accumulation_steps"] == 0:
-                    # Update (increase) learning rate linearly during warmup period
-                    lr_this_step = self.args["learning_rate"] * self.warmup_linear(
-                        global_step / self.num_train_steps,
-                        self.args["warmup_proportion"],
-                    )
-                    for param_group in self.optimizer.param_groups:
-                        param_group["lr"] = lr_this_step
-
-                    # Update model parameters
-                    self.optimizer.step()
-                    global_step += 1
-
-            # Schedule (update) learning rate for next epoch
-            self.scheduler.step()
+                self.optimizer.step()  # Update model parameters
+                self.scheduler.step()  # Update learning rate schedule
+                self.optimizer.zero_grad()  # Set gradients of model parameters to zero
+                global_step += 1
 
             self.logger.info(f"Loss after epoch {i_+1}: {tr_loss / nb_tr_steps}")
             self.logger.info(
                 f"Learning rate after epoch {i_+1}: {self.scheduler.get_last_lr()[0]}"
             )
-            # self.logger.info(f"Eval after epoc {i_ + 1}")
 
-        self.model.save()
+        # self.model.save()

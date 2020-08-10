@@ -1,3 +1,5 @@
+from datetime import date
+
 from transformers import BertForSequenceClassification, BertModel, BertLayer
 
 import torch
@@ -11,6 +13,7 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
     Params:
         `config`: a BertConfig class instance with the configuration to build a new model.
         `num_labels`: the number of classes for the classifier. Default = 2.
+        `num_parent_labels`: the number of classes for the parent classifier. Default = 0.
     Inputs:
         `input_ids`: a torch.LongTensor of shape [batch_size, sequence_length]
             with the word token indices in the vocabulary(see the tokens preprocessing logic in the scripts
@@ -43,12 +46,14 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
     ```
     """
 
-    def __init__(self, config, num_labels=2):
+    def __init__(self, config, num_labels=2, num_labels_parent=0):
         super(BertForMultiLabelSequenceClassification, self).__init__(config)
         self.num_labels = config.num_labels
         self.bert = BertModel(config)
         self.dropout = Dropout(config.hidden_dropout_prob)
-        self.classifier = Linear(config.hidden_size, config.num_labels)
+        self.classifier = Linear(
+            config.hidden_size + num_labels_parent, config.num_labels
+        )
         self.apply(self._init_weights)
 
     def forward(
@@ -59,6 +64,7 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
         labels=None,
         position_ids=None,
         head_mask=None,
+        parent_labels=None,
     ):
 
         outputs = self.bert(
@@ -70,6 +76,9 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
         )
         pooled_output = outputs[1]
 
+        if parent_labels is not None:
+            pooled_output = torch.cat((pooled_output, parent_labels), 1)
+            
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
@@ -86,6 +95,14 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
 
+    def freeze_bert_embeddings(self):
+        for param in self.bert.embeddings.parameters():
+            param.requires_grad = False
+
+    def unfreeze_bert_embeddings(self):
+        for param in self.bert.embeddings.parameters():
+            param.requires_grad = True
+
     def freeze_bert_encoder(self):
         for param in self.bert.encoder.parameters():
             param.requires_grad = False
@@ -95,17 +112,25 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
             param.requires_grad = True
 
     def save(self):
+        """Saves the model as a binary file."""
         model_to_save = (
             self.module if hasattr(self, "module") else self
         )  # Only save the model itself
-        output_model_file = "mltc/data/model_files/finetuned_pytorch_model.bin"
+        d = date.today().strftime("%Y-%m-%d")
+        output_model_file = f"mltc/data/model_files/finetuned_{d}_pytorch_model.bin"
         torch.save(model_to_save.state_dict(), output_model_file)
 
 
-class SubModel(BertForMultiLabelSequenceClassification):
+class BertForMultilabelSpecialized(BertForMultiLabelSequenceClassification):
+    """A subclass that freezes the layers from a pretrained classifier whilst adding
+    an additional transformer block that is finetuned during training.
+    """
+
     def __init__(self, config, num_labels=2):
-        super(SubModel, self).__init__(config)
+        super(BertForMultilabelSpecialized, self).__init__(config)
         self.bert = BertModel(config)
+        self.freeze_bert_embeddings()
         self.freeze_bert_encoder()
         self.bert.encoder.add_module("12", BertLayer(config))
         self.apply(self._init_weights)
+

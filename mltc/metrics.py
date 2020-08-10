@@ -49,6 +49,8 @@ def fbeta(
 
 
 def pairwise_confusion_matrix(y_pred, y_true):
+    """Creates a confusion matrix that is used to make pairwise evaluations
+    between classes in multi-label classification."""
     # Transform logits to OHE labels
     y_pred = expit(y_pred)
     y_pred = np.where(y_pred > 0.5, 1.0, 0.0)

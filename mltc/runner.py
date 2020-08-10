@@ -4,7 +4,10 @@ import numpy as np
 import torch
 from transformers import BertTokenizer
 
-from .models import BertForMultiLabelSequenceClassification, SubModel
+from .models import (
+    BertForMultiLabelSequenceClassification,
+    BertForMultilabelSpecialized,
+)
 from .processor import MultiLabelTextProcessor
 from .trainer import ModelTrainer
 from .evaluator import ModelEvaluator
@@ -23,10 +26,10 @@ logger = logging.getLogger(__name__)
 def get_base_model(num_labels):
     BASE_PATH = "mltc/data/model_files/"
     config = BASE_PATH + "config.json"
-    model_state_dict = torch.load(BASE_PATH + "finetuned_200803_pytorch_model.bin")
+    model_state_dict = torch.load(BASE_PATH + "finetuned_2020-08-10_pytorch_model.bin")
 
     model = BertForMultiLabelSequenceClassification.from_pretrained(
-        config, num_labels=num_labels, state_dict=model_state_dict,
+        config, num_labels=num_labels, state_dict=model_state_dict, num_labels_parent=17
     )
 
     return model
@@ -35,11 +38,11 @@ def get_base_model(num_labels):
 def get_specialized_model(num_labels):
     BASE_PATH = "mltc/data/model_files/"
     config = BASE_PATH + "config.json"
-    model_state_dict = torch.load(BASE_PATH + "finetuned_200803_pytorch_model.bin")
+    model_state_dict = torch.load(BASE_PATH + "finetuned_2020-08-03_pytorch_model.bin")
     del model_state_dict["classifier.weight"]
     del model_state_dict["classifier.bias"]
 
-    model = SubModel.from_pretrained(
+    model = BertForMultilabelSpecialized.from_pretrained(
         config, num_labels=num_labels, state_dict=model_state_dict
     )
 
@@ -73,9 +76,8 @@ if __name__ == "__main__":
         "eval_batch_size": 32,
         "learning_rate": 3e-5,
         "warmup_proportion": 0.1,
-        "gradient_accumulation_steps": 1,
         "seed": 1234567890,
-        "do_train": True,
+        "do_train": False,
     }
 
     random.seed(args["seed"])
@@ -84,19 +86,25 @@ if __name__ == "__main__":
 
     logger.info("Initializing…")
     tokenizer = get_tokenizer()
-    processor = MultiLabelTextProcessor(tokenizer, logger, "culture_categories.txt")
-    model = get_specialized_model(len(processor.labels))
+    processor = MultiLabelTextProcessor(tokenizer, logger, "top_categories.txt")
+    model = get_base_model(len(processor.labels))
 
     if args["do_train"]:
         logger.info("Training…")
         trainer = ModelTrainer(args, processor, model, logger)
-        trainer.prepare_training_data("train_culture.csv")
-        trainer.fit()
+        trainer.prepare_training_data(
+            "train_small.csv", "train_small_parent_labels.csv"
+        )
+        trainer.train()
 
     logger.info("Evaluating…")
     evaluator = ModelEvaluator(args, processor, model, logger)
-    evaluator.prepare_eval_data("eval_culture.csv")
+    evaluator.prepare_eval_data("eval_small.csv", "eval_small_parent_labels.csv")
     results = evaluator.evaluate()
     print(results)
 
     # results = evaluator.predict("test.csv")
+    # TODO: kika layer size
+    # TODO: jämföra epoch eval loss för att hitta optimalt antal träningsepoker
+    # TODO: sätta alla för små kategori i en övrigt-kategori
+

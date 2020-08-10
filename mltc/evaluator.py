@@ -1,3 +1,5 @@
+from datetime import date
+
 import numpy as np
 from sklearn.metrics import (
     roc_curve,
@@ -14,6 +16,12 @@ from tqdm import tqdm
 
 
 class ModelEvaluator:
+    """Class for evaluating and testing the text classification models.
+
+    Evaluation is done with labeled data whilst testing/prediction is done
+    with unlabeled data.
+    """
+
     def __init__(self, args, processor, model, logger):
         self.args = args
         self.processor = processor
@@ -23,8 +31,11 @@ class ModelEvaluator:
         self.device = "cpu"
         self.eval_dataloader: DataLoader
 
-    def prepare_eval_data(self, file_name):
-        eval_examples = self.processor.get_examples(file_name, "eval")
+    def prepare_eval_data(self, file_name, parent_labels=None):
+        """Creates a PyTorch Dataloader from a CSV file, which is used
+        as input to the classifiers.
+        """
+        eval_examples = self.processor.get_examples(file_name, "eval", parent_labels)
         eval_features = self.processor.convert_examples_to_features(
             eval_examples, self.args["max_seq_length"]
         )
@@ -33,6 +44,10 @@ class ModelEvaluator:
         )
 
     def evaluate(self):
+        """Evaluates a classifier using labeled data.
+
+        Calculates and returns accuracy, precision, recall F1 score and ROC AUC.
+        """
         all_logits = None
         all_labels = None
 
@@ -41,10 +56,18 @@ class ModelEvaluator:
         nb_eval_steps, nb_eval_examples = 0, 0
         for batch in self.eval_dataloader:
             batch = tuple(t.to(self.device) for t in batch)
-            input_ids, input_mask, segment_ids, label_ids = batch
-
+            input_ids, input_mask, segment_ids, label_ids, parent_labels = batch
             with torch.no_grad():
-                outputs = self.model(input_ids, segment_ids, input_mask, label_ids)
+                if parent_labels.dtype != torch.bool:
+                    outputs = self.model(
+                        input_ids,
+                        segment_ids,
+                        input_mask,
+                        label_ids,
+                        parent_labels=parent_labels,
+                    )
+                else:
+                    outputs = self.model(input_ids, segment_ids, input_mask, label_ids)
                 tmp_eval_loss, logits = outputs[:2]
 
             tmp_eval_accuracy = accuracy_thresh(logits, label_ids)
@@ -111,11 +134,13 @@ class ModelEvaluator:
             # "confusion_matrices": confusion_matrices,
         }
 
-        self.save_result(result)
+        # self.save_result(result)
         return result
 
     def save_result(self, result):
-        output_eval_file = "mltc/data/results/eval_results.txt"
+        """Saves the evaluation results as a text file."""
+        d = date.today().strftime("%Y-%m-%d")
+        output_eval_file = f"mltc/data/results/eval_results_{d}.txt"
         with open(output_eval_file, "w") as writer:
             self.logger.info("***** Eval results *****")
             for key in sorted(result.keys()):
@@ -123,6 +148,10 @@ class ModelEvaluator:
                 writer.write("%s = %s\n" % (key, str(result[key])))
 
     def predict(self, file_name):
+        """Makes class predicitons for unlabeled data.
+
+        Returns the estimated probabilities for each of the labels.
+        """
         test_examples = self.processor.get_examples(file_name, "test")
         test_features = self.processor.convert_examples_to_features(
             test_examples, self.args["max_seq_length"]
