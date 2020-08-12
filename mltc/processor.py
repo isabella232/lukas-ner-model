@@ -208,7 +208,7 @@ class MultiLabelTextProcessor:
         return features
 
     def pack_features_in_dataloader(self, features, batch_size, set_type):
-        """Transforms input features to tensors and packs them in a PyTorch Dataloader."""
+        """Transforms input features to tensors and packs them in a PyTorch DataLoader."""
         all_input_ids = torch.tensor([f.input_ids for f in features], dtype=torch.long)
         all_input_mask = torch.tensor(
             [f.input_mask for f in features], dtype=torch.long
@@ -217,10 +217,13 @@ class MultiLabelTextProcessor:
             [f.segment_ids for f in features], dtype=torch.long
         )
 
-        all_parent_labels = torch.zeros(len(features), dtype=torch.bool)
         parent_labels = [f.parent_labels for f in features]
         if any(parent_labels):
             all_parent_labels = torch.tensor(parent_labels, dtype=torch.float)
+        else:
+            # PyTorch DataLoader requires that all included tensors have the same length, hence
+            # all_parent_labels is a "dummy" boolean tensor when there are no parent labels.
+            all_parent_labels = torch.zeros(len(features), dtype=torch.bool)
 
         if set_type != "test":
             all_label_ids = torch.tensor(

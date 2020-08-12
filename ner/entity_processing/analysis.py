@@ -6,6 +6,8 @@ from ..utils.file_handling import write_df_to_file, read_df_from_file
 
 
 def linear_regression(x_df, y_df):
+    """Simple linear regression."""
+
     x = x_df.values.reshape(-1, 1)
     y = y_df.values.reshape(-1, 1)
 
@@ -19,8 +21,8 @@ def linear_regression(x_df, y_df):
     return s, p
 
 
-def link_entities_to_categories(articles, entities):
-
+def create_category_df(articles):
+    """Creates a dataframe of all categories in the data, paired with the articles using them."""
     categories_list = []
 
     for i in articles.index:
@@ -41,13 +43,16 @@ def link_entities_to_categories(articles, entities):
         .apply(list)
         .reset_index(name="article_ids")
     )
+
+    return categories
+
+
+def link_entities_to_categories(entities, categories):
     categories["no_uses"] = categories["article_ids"].str.len()
 
     entity_column = []
-
     for i in categories.index:
-        ents = []
-        cnts = []
+        ents, cnts = [], []
 
         for aid in categories["article_ids"][i]:
             filtered = entities[entities["article_ids"].apply(lambda x: aid in x)]
@@ -67,13 +72,6 @@ def link_entities_to_categories(articles, entities):
     categories["entities"] = entity_column
     categories["no_unique_entities"] = categories["entities"].str.len()
 
-    # most_frequent = categories_df.head(5)
-    # print(most_frequent)
-    # for i in most_frequent.index:
-    #     print('\n', most_frequent['category'][i])
-    #     for entity in most_frequent['entities'][i]:
-    #         if entity[0] > 10: print(entity)
-
     tot_no_column = []
 
     for i in categories.index:
@@ -88,46 +86,46 @@ def link_entities_to_categories(articles, entities):
     return categories
 
 
-articles = read_df_from_file("data/dataframes/articles_10k_df.jsonl")
-all_entities = read_df_from_file("data/dataframes/all_entities_10k_df.jsonl")
-merged_entities = read_df_from_file("data/dataframes/merged_entities_10k_df.jsonl")
+if __name__ == "__main__":
+    articles = read_df_from_file("data/dataframes/articles_10k_df.jsonl")
+    all_entities = read_df_from_file("data/dataframes/all_entities_10k_df.jsonl")
+    merged_entities = read_df_from_file("data/dataframes/merged_entities_10k_df.jsonl")
 
+    # Visualize how many entities occur x number of times
+    count = pd.DataFrame(merged_entities.groupby("no_occurrences").size()).reset_index()
+    count = count.rename(columns={0: "no_entities"})
+    count = count[count["no_entities"] > 1]
 
-# Visualize how many entities occur x number of times
-count = pd.DataFrame(merged_entities.groupby("no_occurrences").size()).reset_index()
-count = count.rename(columns={0: "no_entities"})
-count = count[count["no_entities"] > 1]
+    # Visualize the relationship between text length and the number of entities found (per article)
+    per_article_list = []
+    grouped_entities = all_entities.groupby(["article_id"]).count().reset_index()
 
+    for i in articles.index:
+        no_entities = grouped_entities[
+            grouped_entities["article_id"] == articles["id"][i]
+        ]
+        no_entities = no_entities["index"].item() if len(no_entities) > 0 else 0
+        article_len = len(articles["content_text"][i])
+        per_article_list += [{"no_entities": no_entities, "article_len": article_len}]
 
-# Visualize the relationship between text length and the number of entities found (per article)
-per_article_list = []
-grouped_entities = all_entities.groupby(["article_id"]).count().reset_index()
+    per_article = pd.DataFrame(per_article_list)
+    per_article = per_article.sort_values(by=["no_entities"], ascending=False)
 
-for i in articles.index:
-    no_entities = grouped_entities[grouped_entities["article_id"] == articles["id"][i]]
-    no_entities = no_entities["index"].item() if len(no_entities) > 0 else 0
-    article_len = len(articles["content_text"][i])
-    per_article_list += [{"no_entities": no_entities, "article_len": article_len}]
+    f1 = plt.figure(1)
+    linear_regression(per_article["no_entities"], per_article["article_len"])
+    f1.show()
 
-per_article = pd.DataFrame(per_article_list)
-per_article = per_article.sort_values(by=["no_entities"], ascending=False)
+    # Category-wise analysis
+    print("Analyzing categories…")
+    categories = create_category_df(articles)
+    categories = link_entities_to_categories(merged_entities, categories)
+    print("Done analyzing!")
+    f2 = plt.figure(2)
+    linear_regression(categories["no_unique_entities"], categories["tot_no_entities"])
+    f2.show()
 
-f1 = plt.figure(1)
-linear_regression(per_article["no_entities"], per_article["article_len"])
-f1.show()
+    count.plot(x="no_occurrences", y="no_entities")
+    categories.hist(bins=70)
+    plt.show()
 
-
-# Category-wise analysis
-print("Analyzing categories…")
-categories = link_entities_to_categories(articles, merged_entities)
-print("Done analyzing!")
-f2 = plt.figure(2)
-linear_regression(categories["no_unique_entities"], categories["tot_no_entities"])
-f2.show()
-
-count.plot(x="no_occurrences", y="no_entities")
-categories.hist(bins=70)
-# plt.show()
-
-
-# write_df_to_file(categories, "data/dataframes/categories_10k_df.jsonl")
+    # write_df_to_file(categories, "data/dataframes/categories_10k_df.jsonl")

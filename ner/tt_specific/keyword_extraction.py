@@ -168,16 +168,3 @@ if __name__ == "__main__":
     [print(e) for e in entities]
     print("_" * 50)
     print(tt_match["name"])
-
-    # str_i = "jazz"
-    # str_j = "musik"
-
-    # emb_i = create_embedding(str_i)
-    # emb_j = create_embedding(str_j)
-
-    # shortest = range(0, min(emb_i.shape[1], emb_j.shape[1]))
-    # emb_i_reshape = torch.reshape(emb_i[:, shortest, :], (-1,))
-    # emb_j_reshape = torch.reshape(emb_j[:, shortest, :], (-1,))
-
-    # sim = cos(emb_i_reshape, emb_j_reshape)
-    # print(sim.item())

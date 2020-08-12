@@ -99,7 +99,7 @@ class ModelTrainer:
                 input_ids, input_mask, segment_ids, label_ids, parent_labels = batch
 
                 # Forward pass, compute loss for prediction
-                # parent_labels is boolean type if there are no parent labels
+                # parent_labels is of boolean type if there are no parent labels
                 if parent_labels.dtype != torch.bool:
                     outputs = self.model(
                         input_ids,

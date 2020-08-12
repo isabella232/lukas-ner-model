@@ -72,6 +72,7 @@ def get_category_codes(is_top):
 def transform(
     articles, is_mm, use_iptc, mapping, cat_dict, iptc_codes=set(), mm_codes=set()
 ):
+    """Transform TT or MittMedia articles with top categories."""
     transformed = []
     for article in articles:
         aid = article["id"]
@@ -107,6 +108,7 @@ def transform(
 
 
 def process_mm_subcategories():
+    """Processes MittMedia articles with sub-categories and transforms them to be used as input to the classifiers."""
     articles = get_articles("data/input/articles_mittmedia_subcategories.json")
 
     codes = [
@@ -246,6 +248,7 @@ def process_mm_subcategories():
 
 
 def split_and_save(df, file_1, file_2):
+    """Splits dataframe into top-category labels and culture sub-category labels and saves them."""
     top = df.iloc[:, -17:].copy()
     top["aid"] = df["aid"].values
     cols = top.columns.tolist()
@@ -275,6 +278,7 @@ def smooth_category_distribution(tt_df, mm_df, iptc_codes):
 
 
 def check_category_distribution(df):
+    """Ouputs information about how the articles are distributed over the categories."""
     for i in df.columns[3:]:
         filt = df[df[i] == 1]
         occurrence = filt[i].count()
@@ -288,27 +292,7 @@ def check_category_distribution(df):
 if __name__ == "__main__":
     seed = 1234567890
 
-    names = [
-        "Konst, kultur och nöje",
-        "Brott, lag och rätt",
-        "Katastrofer och olyckor",
-        "Ekonomi, affärer och finans",
-        "Utbildning",
-        "Miljö och natur",
-        "Medicin och hälsa",
-        "Mänskligt",
-        "Arbete",
-        "Fritid och livsstil",
-        "Politik",
-        "Etik och religion",
-        "Teknik och vetenskap",
-        "Samhälle",
-        "Sport",
-        "Krig, konflikter och oroligheter",
-        "Väder",
-    ]
-
-    process_mm_subcategories()
+    # process_mm_subcategories()
 
     tt_articles = get_articles("data/input/articles_tt_culture.jsonl")
     mm_articles = get_articles("data/input/articles_mittmedia_culture.json")

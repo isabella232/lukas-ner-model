@@ -1,10 +1,9 @@
-import time
 import re
-import json
 import random
 from string import punctuation
 
 import jsonlines
+from tqdm import tqdm
 from transformers import pipeline
 
 from ..utils.file_handling import write_output_to_file
@@ -23,15 +22,25 @@ def get_articles(path):
 
 
 def avg_score(entity):
+    """ Returns the average score of a list of entities."""
     return sum(entity["score"]) / len(entity["score"])
 
 
 def handle_ambiguity(previous, current):
+    """If the entity types of two grouped word (sequences) differ, select
+    the type which has the highest total score associated with it.
+    """
     if avg_score(previous) < current["score"]:
         previous["entity"] = current["entity"]
 
+    return previous, current
+
 
 def group_entities(raw_entities, punct):
+    """Processes the entities outputted by the model in order to group
+    e.g. group words that have been tokenized into multiple tokens and
+    entity names consisting of multiple words.
+    """
     is_punct = lambda x: x in punct
     grouped_entities = []
 
@@ -50,14 +59,15 @@ def group_entities(raw_entities, punct):
             adjacent = previous["index"] == current["index"] - 1
             same_entity = previous["entity"] == current["entity"]
 
+        is_subword = current["word"].startswith("##")
         is_per_or_loc = current["entity"] == "PER" or current["entity"] == "LOC"
 
         # Handle subwords
-        if grouped_entities and current["word"].startswith("##"):
+        if grouped_entities and is_subword:
             if adjacent:
                 # Handle subwords that are of different entity types
                 if not same_entity:
-                    handle_ambiguity(previous, current)
+                    previous, current = handle_ambiguity(previous, current)
 
                 previous["index"] = current["index"]
                 previous["word"] += current["word"][2:]
@@ -80,15 +90,15 @@ def group_entities(raw_entities, punct):
             # Determine if the word suffix should be preceded by a space
             suffix = (
                 current["word"]
-                if either_punct and not current["word"] == "och"
+                if either_punct and current["word"] != "och"
                 else " " + current["word"]
             )
 
             previous["word"] += suffix
             previous["score"] += [current["score"]]
 
-        # Ignore single characters and "s"
-        elif is_punct(current["word"]) or current["word"] == "s":
+        # Ignore single characters, "s" and subwords
+        elif is_punct(current["word"]) or current["word"] == "s" or is_subword:
             current["word"] = "NA"
 
         # Handle trivial entities
@@ -119,17 +129,12 @@ def recognize_entities(articles):
     model_name = "KB/bert-base-swedish-cased-ner"
     nlp = pipeline("ner", model=model_name, tokenizer=model_name)
 
-    # indexes = random.sample(range(0, len(articles) - 1), 10)
-    # articles = [article for i, article in enumerate(articles) if i in indexes]
-
     punct = set(punctuation)
     punct.update("’")
     all_entities = []
     omitted_articles = []
 
-    for i, article in enumerate(articles):
-        print("Processing article", i, "…")
-
+    for article in tqdm(articles, desc="Article"):
         text = article["text"].replace("\n\n", ".")
         sentences = re.findall(".*?[.?!]", text)
         entities = []
@@ -156,11 +161,20 @@ def recognize_entities(articles):
 
     # validate_scores(grouped_entities)
 
+    print(f"{len(omitted_articles)} articles omitted")
+    if len(omitted_articles) > 0:
+        print(f"The omitted articles' ids are: {omitted_articles}")
+
     return all_entities, omitted_articles
 
 
 if __name__ == "__main__":
     articles = get_articles("data/input/articles_tt_new.jsonl")
+
+    # For test purposes: randomize 10 article texts from the input
+    indexes = random.sample(range(0, len(articles) - 1), 10)
+    articles = [article for i, article in enumerate(articles) if i in indexes]
+
     entities, omitted = recognize_entities(articles)
 
     write_output_to_file(entities, "data/output/results_tt_new.jsonl")

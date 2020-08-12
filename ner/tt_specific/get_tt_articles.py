@@ -7,6 +7,7 @@ from ..utils.file_handling import write_output_to_file
 
 
 def get_api_key():
+    """Gets key for TT's API, expected to be present in data/secrets/tt_api_key.txt"""
     with open("data/secrets/tt_api_key.txt", "r") as f:
         key = f.read()
 
@@ -92,9 +93,8 @@ products = [
 
 all_articles = []
 processed_aids = set()
+# The range that is looped over corresponds to the 17 top-level categories in IPTC
 for subject_id in range(1, 18):
-    print(subject_id)
-
     articles, processed_aids = get_subject_articles(
         subject_id, products, processed_aids
     )

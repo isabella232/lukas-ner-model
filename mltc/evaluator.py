@@ -57,7 +57,9 @@ class ModelEvaluator:
         for batch in self.eval_dataloader:
             batch = tuple(t.to(self.device) for t in batch)
             input_ids, input_mask, segment_ids, label_ids, parent_labels = batch
+
             with torch.no_grad():
+                # parent_labels is of boolean type if there are no parent labels
                 if parent_labels.dtype != torch.bool:
                     outputs = self.model(
                         input_ids,
@@ -68,6 +70,7 @@ class ModelEvaluator:
                     )
                 else:
                     outputs = self.model(input_ids, segment_ids, input_mask, label_ids)
+                    
                 tmp_eval_loss, logits = outputs[:2]
 
             tmp_eval_accuracy = accuracy_thresh(logits, label_ids)
@@ -191,29 +194,9 @@ class ModelEvaluator:
                     (all_logits, logits.detach().cpu().numpy()), axis=0
                 )
 
-        label_names = [
-            "Konst, kultur och nöje",
-            "Brott, lag och rätt",
-            "Katastrofer och olyckor",
-            "Ekonomi, affärer och finans",
-            "Utbildning",
-            "Miljö och natur",
-            "Medicin och hälsa",
-            "Mänskligt",
-            "Arbete",
-            "Fritid och livsstil",
-            "Politik",
-            "Etik och religion",
-            "Teknik och vetenskap",
-            "Samhälle",
-            "Sport",
-            "Krig, konflikter och oroligheter",
-            "Väder",
-        ]
-
         return pd.merge(
             pd.DataFrame(input_data),
-            pd.DataFrame(all_logits, columns=label_names),
+            pd.DataFrame(all_logits),
             left_index=True,
             right_index=True,
         )
