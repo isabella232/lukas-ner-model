@@ -6,6 +6,8 @@ import regex
 
 
 class Evaluator:
+    """Class for evaluating NER models on two IOB tagged datasets: SUC 3.0 and Web News 2012, both from Språkbanken."""
+
     def __init__(self, suc):
         self.suc = suc
 
@@ -19,6 +21,7 @@ class Evaluator:
             self.desired = ["PER", "ORG", "LOC"]
 
     def _format_sentences(self, corpus):
+        """Returns a list of only sentences."""
         corpus = corpus.split("\n\n")
         sentences = []
 
@@ -32,6 +35,7 @@ class Evaluator:
         return sentences[:-1]
 
     def _format_tags(self, entities):
+        """Returns a list of only tags"""
         new_l = [-1]
         new_l += [i for i, val in enumerate(entities) if val == "\n"]
         grouped = []
@@ -46,6 +50,7 @@ class Evaluator:
         return grouped
 
     def load_corpus(self):
+        """Loads the NER-tagged corpus and returns the sentences and tags."""
         with open(self.path) as f:
             lines = f.readlines()
             f.seek(0)
@@ -59,6 +64,7 @@ class Evaluator:
         return sentences, tags
 
     def _filter_tags(self, tags):
+        """Filters out unwanted IOB tags."""
         filtered = []
 
         for ts in tags:
@@ -68,6 +74,7 @@ class Evaluator:
         return filtered
 
     def prepare_for_evaluation(self, sentences, tags, sample_size):
+        """Prepare dataset for evaluation."""
         if sample_size < 1.0:
             no_sentences = len(sentences)
             eval_size = int(no_sentences * sample_size)
@@ -83,6 +90,7 @@ class Evaluator:
 
     @staticmethod
     def get_results(path):
+        """Returns previouslt saved evaluation results."""
         with jsonlines.open(path, "r") as reader:
             results = [obj for obj in reader]
 
@@ -90,6 +98,7 @@ class Evaluator:
 
     # f = found, g = golden standard, w = words, e = entities, i = index, d = dictionary, t = tag
     def _evaluate_typewise(self, f_w, f_e, g_w, g_e, d, t):
+        """Evaluates model performance for one entity type."""
         n_i = [i for i, x in enumerate(f_e) if x == t]
         g_i = [i for i, x in enumerate(g_e) if x == t]
 
@@ -113,6 +122,7 @@ class Evaluator:
         return d
 
     def evaluate(self, entities, tags, min_thresh):
+        """Performs evaluation."""
         # True positives, all positives, relevant
         per = {"tp": [], "ap": [], "rel": []}
         org = {"tp": [], "ap": [], "rel": []}
@@ -140,6 +150,7 @@ class Evaluator:
 
     @staticmethod
     def calculate_metrics(res, tag):
+        """Calculates and returns precision, recall and F1 score."""
         precision = len(res["tp"]) / len(res["ap"])
         recall = len(res["tp"]) / len(res["rel"])
         f1 = 2 * precision * recall / (precision + recall)

@@ -18,7 +18,7 @@ def max_similarity(emb_i, emb_j):
     """Calculates the cosine similarity between two word embeddings.
 
     If the embedding vectors differ in length, the shorter vector is "slided" over the longer
-    vector and similarity is calculated at each position. Then, the maximum similarity is returned.
+    vector and similarity is calculated at each position. From those similarities, the largest one is returned.
     """
     cos = nn.CosineSimilarity(dim=0)
     sim = 0

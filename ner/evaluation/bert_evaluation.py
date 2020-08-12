@@ -22,6 +22,7 @@ punct = set(punctuation)
 all_types = evaluator.desired + ["TME", "MSR", "WRK", "EVN", "OBJ"]
 formatted = []
 
+# Basic formatting to stitch tokens and words back together into coherent entities.
 print("Formatting entities…")
 for ents in entities:
     sen_form = []
@@ -59,6 +60,16 @@ for ents in entities:
     formatted += [sen_form]
 
 write_output_to_file(formatted, "data/output/bert_evaluation_v2.jsonl")
+
+"""
+To perform NER with NERD, something along the lines of:
+
+from ner_app.entity_recognition import NerClass
+ner_cls = NerClass()
+entities = [ner_cls.predict(sentence) for sentence in sentences]
+
+can be used in https://github.com/BonnierNews/nerd_2019.
+"""
 
 entities = evaluator.get_results("data/output/bert_evaluation_v2.jsonl")
 per, org, loc, no_selected = evaluator.evaluate(entities, tags, 0.0)

@@ -147,13 +147,14 @@ def rescale(vs):
 
 
 def calculate_entity_weight(df, i1, i2):
+    """Returns a weight based on theusage frequency of the entity."""
     frequency = df["entities"][i1][i2][0] / df["tot_no_entities"][i1]
 
     return frequency
 
 
 def compare_categories(categories, top_categories=None, selected=None):
-    """Compares each category with all other categories by calculating similarity using entities."""
+    """Compares each category i with all other categories j by calculating similarity using entities."""
     start_time = time.time()
 
     print("Unpickling…")
@@ -197,15 +198,18 @@ def compare_categories(categories, top_categories=None, selected=None):
                     ent_j = top_categories["entities"][j1][j2][1]
                     emb_j = retrieve_embedding(ent_j, lookup, embeddings)
 
+                    # Reshaping/resizing of word embedding tensors so that they can be inputted to cos()
                     shortest = range(min(emb_i.shape[1], emb_j.shape[1]))
                     emb_i_reshape = torch.reshape(emb_i[:, shortest, :], (-1,))
                     emb_j_reshape = torch.reshape(emb_j[:, shortest, :], (-1,))
 
                     sim = cos(emb_i_reshape, emb_j_reshape)
+                    # Final weight formula: w_i/e^|w_i - w_j|
                     single_ent[j2] = sim.item() * w_i / math.exp(abs(w_i - w_j))
 
+                # Select the maximum individual entity similarity from those calculated
                 ent_sim[i2] = max(single_ent) if single_ent else 0
-
+            # Average the individual entity similariteis to obtain the final similarity measure
             cat_sim[j1] = sum(ent_sim) / len(ent_sim) if ent_sim else 0
 
         sim_matrix[i1] = rescale(cat_sim)

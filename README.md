@@ -1,6 +1,6 @@
 # Evaluation of KB-BERT for Swedish NLP
 <img align="right" width="200" height="330" src="images/bert.png">
-This repository is populated with work aiming to investigate the Swedish BERT model (KB-BERT), specifically its performance at named entity recognition and multi-label text classification for news articles and possible improvements to enhance it in the domain. The exact model evaluated is <b>bert-base-swedish-cased-ner</b>.<br/><br/>
+This repository is populated with work aiming to investigate the Swedish BERT model (KB-BERT), specifically its performance at named entity recognition and multi-label text classification for news articles and possible improvements to enhance it in the domain.
 
 * The original paper on KB-BERT can be found [here](https://arxiv.org/pdf/2007.01658.pdf).
 * The KB-BERT models kan be found [here](https://github.com/Kungbib/swedish-bert-models).
@@ -18,10 +18,11 @@ pip install -r requirements.txt
 ```
 
 ## Data
-Explanation of data used and link to Drive folder.
+All input data and various intermediate results can be found [here](https://drive.google.com/drive/u/0/folders/1To6v4SPUL1eHOf2OGtoILg0htD3Mae0E) for reproducability. Placing the data folders locally in the cloned repository will enable all code to run from the get-go. The input data of articles from Bonnier News are retrieved from <i>
+data-warehouse-bn.content.article_deduplicated</i> in BigQuery, while the articles from TT are retrieved via the <i>Search API</i> by using get_tt_articles.py.
 
 ## Named Entity Recognition (NER)
-The <i>ner</i> directory contains work where the pre-finetuned <b>bert-base-swedish-cased-ner</b> is evaluated at NER, as well as exploratory work on applications of the results.
+The <i>ner</i> directory contains work where the pre-finetuned <b>bert-base-swedish-cased-ner</b> is evaluated at NER, as well as exploratory work regarding the applications of NER.
 
 * entity_processing/
     * recognition.py – for performing NER on a dataset of articles, essentially the same code used in the krangy repository
@@ -41,6 +42,8 @@ The <i>ner</i> directory contains work where the pre-finetuned <b>bert-base-swed
 * tt_specific/
     * get_tt_articles.py – for querying and saving TT articles
     * keyword_extraction.py – for extracting keywords (entities) representative of a given IPTC category
+
+If NER is to be performed on new article datasets, the scripts under entity_processing above are generally supposed to be run in the order in which they are listed. The reason being that the output from one script often is used as input to another.
 
 ## Multi-Label Text Classification (MLTC)
 The <i>mltc</i> directory contains work where <b>bert-base-swedish-cased</b> is finetuned for hierarchical multi-label text classification. Aiming to create a classifier that is able to predict the category/categories of news articles, the models are trained and evaluated on texts from MittMedia and TT, which both employ IPTC subject codes for categorizing.
