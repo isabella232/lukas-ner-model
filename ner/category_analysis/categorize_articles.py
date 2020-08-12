@@ -1,14 +1,9 @@
 import pickle
-import math
-import time
 import random
 
-
 import numpy as np
-import pandas as pd
 import torch
 from torch import nn
-from scipy.spatial.distance import cosine
 
 from .utils.parse_articles import get_articles
 from .utils.file_handling import write_df_to_file, read_df_from_file

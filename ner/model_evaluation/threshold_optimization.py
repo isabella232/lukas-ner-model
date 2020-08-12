@@ -33,7 +33,6 @@ def calculate_scores(entities):
 
 
 def threshold_evaluation(scores):
-
     precision = scores[0]
     recall = scores[1]
     f1 = scores[2]

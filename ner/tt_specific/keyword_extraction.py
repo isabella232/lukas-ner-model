@@ -1,10 +1,6 @@
 import json
 
-import torch
-from torch import nn
 import pandas as pd
-from scipy.spatial.distance import cosine
-from transformers import BertModel, BertTokenizer
 
 from ..utils.file_handling import read_df_from_file
 
@@ -24,18 +20,8 @@ def get_iptc_tt(path):
     return set(codes)
 
 
-def create_embedding(word):
-    try:
-        input_ids = torch.tensor(tokenizer.encode(word)).unsqueeze(0)
-    except ValueError:
-        print(word)
-    outputs = model(input_ids)
-    last_hidden_states = outputs[0]
-
-    return last_hidden_states
-
-
 def create_lookup():
+    """Create a lookup table for all IPTC categories."""
     iptc_all = get_iptc_all("data/iptc_all.json")
     iptc_tt = get_iptc_tt("data/iptc_tt.json")
 
@@ -47,19 +33,15 @@ def create_lookup():
 
         if not name:
             continue
-
         try:
             name = name["se"]
         except KeyError:
             pass
 
         code = category["qcode"].replace("medtop:", "")
-        if code in iptc_tt:
-            print(name)
         tt = True if code in iptc_tt else False
 
-        embedding = create_embedding(name)
-        temp = {"code": code, "name": name, "embedding": embedding, "tt": tt}
+        temp = {"code": code, "name": name, "tt": tt}
 
         if not top_level(code):
             broader = category["broader"][0].split("/")[-1]
@@ -67,11 +49,14 @@ def create_lookup():
 
         lookup += [temp]
 
-    with open("data/pickles/iptc_embeddings.pickle", "wb") as f:
-        torch.save(lookup, f)
+    return lookup
 
 
 def find_nearest_tt(cat):
+    """Returns the nearest IPTC category in the tree used by TT.
+    
+    Example: input "Jazz" => output "Musik"
+    """
     if not cat["tt"]:
         code = cat["broader"]
         cat = [cat for cat in lookup if cat["code"] == code][0]
@@ -80,57 +65,14 @@ def find_nearest_tt(cat):
         return cat
 
 
-def max_similarity(emb_i, emb_j):
-    cos = nn.CosineSimilarity(dim=0)
-    sim = 0
-
-    len_i = emb_i.shape[1]
-    len_j = emb_j.shape[1]
-    len_diff = len_i - len_j
-
-    if len_diff == 0:
-        emb_i_reshape = torch.reshape(emb_i, (-1,))
-        emb_j_reshape = torch.reshape(emb_j, (-1,))
-        sim = cos(emb_i_reshape, emb_j_reshape)
-    else:
-        longer, shorter = (emb_i, emb_j) if len_diff > 0 else (emb_j, emb_i)
-        len_short = min(len_i, len_j)
-        short_reshape = torch.reshape(shorter, (-1,))
-
-        for i in range(abs(len_diff)):
-            sub_range = range(i, i + len_short)
-            long_reshape = torch.reshape(longer[:, sub_range, :], (-1,))
-            sim = max(sim, cos(short_reshape, long_reshape))
-
-    return sim.item()
-
-
-def category_match(keyword):
-    kw = create_embedding(keyword)
-    similarities = []
-
-    for category in lookup:
-        cat = category["embedding"]
-        similarities += [max_similarity(kw, cat)]
-
-        # shortest = range(min(kw.shape[1], cat.shape[1]))
-        # kw_reshape = torch.reshape(kw[:, shortest, :], (-1,))
-        # cat_reshape = torch.reshape(cat[:, shortest, :], (-1,))
-        # similarities += [cos(kw_reshape, cat_reshape).item()]
-
-    max_val = max(similarities)
-    max_ind = similarities.index(max_val)
-
-    return lookup[max_ind], max_val
-
-
-def find_entities(keyword, freq_thresh, uniq_thresh):
+def find_entities(category, freq_thresh, uniq_thresh):
+    """Returns the entities/keywords used in a category given the thresholds for frequency and uniqueness."""
     categories = read_df_from_file("data/dataframes/categories_tt_new_df.jsonl")
     lookup = read_df_from_file("data/dataframes/tt_entity_lookup_df.jsonl")
     relevant_entities = []
 
     filter_series = pd.Series(list(zip(*categories["category"]))[0])
-    match = categories[filter_series == keyword["code"]]
+    match = categories[filter_series == category["code"]]
 
     if not match.empty:
         entities = match["entities"].tolist()[0]
@@ -149,21 +91,13 @@ def find_entities(keyword, freq_thresh, uniq_thresh):
 
 
 if __name__ == "__main__":
-    model_name = "KB/bert-base-swedish-cased-ner"
-    tokenizer = BertTokenizer.from_pretrained(model_name)
-    model = BertModel.from_pretrained(model_name)
-    cos = nn.CosineSimilarity(dim=0)
-
-    # create_lookup()
-
-    with open("data/pickles/iptc_embeddings.pickle", "rb") as f:
-        lookup = torch.load(f)
+    lookup = create_lookup()
 
     # Must be the name of an IPTC category
-    keyword = "Bilar"
+    category = "Jazz"
+    category = [cat for cat in lookup if cat["name"] == category][0]
 
-    match, sim = category_match(keyword)
-    tt_match = find_nearest_tt(match)
+    tt_match = find_nearest_tt(category)
     entities = find_entities(tt_match, 0.8, 0.4)
     [print(e) for e in entities]
     print("_" * 50)

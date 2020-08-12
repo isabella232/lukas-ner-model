@@ -1,8 +1,8 @@
-from collections import Counter
 import pickle
 import math
 import time
 import hashlib
+from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -10,93 +10,20 @@ import matplotlib.pyplot as plt
 from transformers import BertModel, BertTokenizer
 import torch
 from torch import nn
-from scipy.spatial.distance import cosine
-from wmd import WMD
-import nltk
-from nltk.corpus import stopwords
-from sklearn.feature_extraction.text import TfidfVectorizer
+
 
 from .utils.parse_articles import get_articles
 from .utils.file_handling import write_df_to_file, read_df_from_file
 
 
 def create_embedding(word):
+    """Creates and returns a word embedding using BERT."""
     input_ids = torch.tensor(tokenizer.encode(word)).unsqueeze(0)  # Batch size 1
     outputs = model(input_ids)
     # The last hidden-state is the first element of the output tuple
     last_hidden_states = outputs[0]
 
     return last_hidden_states
-
-
-def TFIDF_article_similarity():
-    stopwords = stopwords.words("swedish")
-    articles = get_articles("data/articles_10k.json")
-
-    corpus = [article["content_text"] for article in articles]
-
-    vect = TfidfVectorizer(min_df=1, stop_words=stopwords)
-    tfidf = vect.fit_transform(corpus)
-    pairwise_similarity = tfidf * tfidf.T
-
-    return pairwise_similarity.toarray()
-
-
-def BERT_article_similarity():
-
-    articles = get_articles("data/articles_small.json")
-    stopwords = stopwords.words("swedish")
-    embeddings = []
-
-    for article in articles:
-        temp = []
-        sentences = article["content_text"].replace("\n\n", ".").split(".")
-        for sentence in sentences:
-            if not sentence.strip():
-                continue
-            words = sentence.split()
-            print(tokenizer.encode(sentence))
-            # print([word for word in words if word not in stopwords ])
-            ok_ind_w = [i for i in range(len(words)) if words[i] not in stopwords]
-            token_lens = [len(tokenizer.encode(word)) - 2 for word in words]
-            ok_ind_t = []
-            for i in ok_ind_w:
-                prev = sum(token_lens[0:i]) if i > 0 else 0
-                ok_ind_t += [prev + i for i in range(0, token_lens[i])]
-            ok_ind_t = [i + 1 for i in ok_ind_t]
-            try:
-                embedding = create_embedding(sentence.strip() + ".")
-                embedding = embedding[:, ok_ind_t, :]
-                temp += [embedding]
-            except IndexError:  # 1541 max length sentence
-                print(sentence)
-                continue
-        embeddings += [temp]
-        print("-" * 100)
-    print(len(embeddings), "article embeddings created!")
-
-    all_sims = []
-    for i, art_i in enumerate(embeddings):
-        art_sims = []
-        for j, art_j in enumerate(embeddings):
-            print("Now comparing article", i, "with article", j, "…")
-            if i == j:
-                continue
-            sen_sims = []
-            for sen_i in art_i:
-                tok_sims = []
-                for sen_j in art_j:
-                    for tok_i in range(0, sen_i.size()[1]):
-                        for tok_j in range(0, sen_j.size()[1]):
-                            sim = cos(sen_i[:, tok_i, :], sen_j[:, tok_j, :]).item()
-                            tok_sims += [sim]
-                sen_sims += [max(tok_sims)]
-            art_sims += [(sum(sen_sims) / len(sen_sims)) ** 2]
-        all_sims += [art_sims]
-
-    print("[hockey, hockey, börs, börs]")
-    for sim in all_sims:
-        print(sim)
 
 
 def create_sub_lookup(sub_lookup, first_char):
@@ -107,8 +34,8 @@ def create_sub_lookup(sub_lookup, first_char):
 
 
 def partition_into_lookup(embeddings):
-    lookup = []
-    sub_lookup = []
+    """Partitions the entity embeddings based on their first letters."""
+    lookup, sub_llokup = [], []
     first_char = embeddings[0]["entity"][0]
 
     for i, emb in enumerate(embeddings):
@@ -130,20 +57,18 @@ def partition_into_lookup(embeddings):
 
 
 def int_representation(entity):
-    # encoded = bytes(entity, encoding="utf-8")
-    # hex_hash = hashlib.sha1(encoded).hexdigest()
-
-    # return int(hex_hash, 16)
+    """Returns a unique integer representation of a string (entity)."""
     return int.from_bytes(entity.encode(), "little")
 
 
 def create_entity_embeddings(path_1, path_2=None, selected_aids=None, mittmedia=False):
+    """Creates embeddings for entities and saves them in a lookup table."""
     if path_2 is not None and selected_aids is not None:
         entities_1 = read_df_from_file(path_1)
 
         if mittmedia:
-            entities_1 = entities_1[entities_1["article_ids"].apply(any_common)]
             any_common = lambda x: True if set(x) & selected_aids else False
+            entities_1 = entities_1[entities_1["article_ids"].apply(any_common)]
 
         entities_2 = read_df_from_file(path_2)
         all_entities = pd.concat([entities_1, entities_2]).drop_duplicates(
@@ -205,6 +130,7 @@ def binary_search(lookup, val):
 
 
 def retrieve_embedding(entity, lookup, embeddings):
+    """Retrieves entity embedding from the lookup table using binary search."""
     sub_lookup = [sub for sub in lookup if sub["first"] == entity[0]]
 
     index = binary_search(sub_lookup[0], int_representation(entity))
@@ -214,6 +140,7 @@ def retrieve_embedding(entity, lookup, embeddings):
 
 
 def rescale(vs):
+    """Rescales similairy vectors."""
     # mn = min(vs)
     # mx = max(vs)
     # denominator = mx - mn
@@ -229,6 +156,7 @@ def calculate_entity_weight(df, i1, i2):
 
 
 def compare_categories(categories, top_categories=None, selected=None):
+    """Compares each category with all other categories by calculating similarity using entities."""
     start_time = time.time()
 
     print("Unpickling…")
@@ -278,7 +206,7 @@ def compare_categories(categories, top_categories=None, selected=None):
 
                     sim = cos(emb_i_reshape, emb_j_reshape)
                     single_ent[j2] = sim.item() * w_i / math.exp(abs(w_i - w_j))
-                # Median + max för att undvika att stora kategorier får bäst score?
+
                 ent_sim[i2] = max(single_ent) if single_ent else 0
 
             cat_sim[j1] = sum(ent_sim) / len(ent_sim) if ent_sim else 0
@@ -307,7 +235,7 @@ def load_and_print_top_similarities(categories, top_categories, selected):
         category = categories["category"][ind]
         tot_no = categories["tot_no_entities"][ind]
 
-        if not category in selected:
+        if category not in selected:
             continue
 
         maxs = [
@@ -365,20 +293,20 @@ if __name__ == "__main__":
         "Familjefrågor",
         "Anställningsförhållanden",
         "Mat & dryck",
-        # "Politiska frågor",
-        # "Religiösa byggnader",
-        # "Samhällsvetenskaper",
-        # "Infrastruktur",
-        # "Fotboll",
-        # "Oroligheter",
-        # "Väderfenomen",
+        "Politiska frågor",
+        "Religiösa byggnader",
+        "Samhällsvetenskaper",
+        "Infrastruktur",
+        "Fotboll",
+        "Oroligheter",
+        "Väderfenomen",
     ]
 
     selected_tt = [
         "Politik",
         "Brott, lag och rätt",
         "Ekonomi, affärer och finans",
-        # "Konst, kultur och nöje",
+        "Konst, kultur och nöje",
     ]
 
     # selected_aids = categories[categories["category"].apply(lambda x: x in selected)][
@@ -390,29 +318,15 @@ if __name__ == "__main__":
     # create_entity_embeddings(path_1="data/dataframes/merged_entities_tt_df.jsonl")
     # compare_categories(categories=categories)
 
-    # create_entity_embeddings(
-    #     path_1="data/dataframes/merged_entities_tt_df.jsonl",
-    #     path_2="data/dataframes/merged_entities_mittmedia_df.jsonl",
-    #     selected_aids=selected_aids,
-    # )
-    # compare_categories(categories, top_categories, selected_tt)
+    create_entity_embeddings(
+        path_1="data/dataframes/merged_entities_tt_df.jsonl",
+        path_2="data/dataframes/merged_entities_mittmedia_df.jsonl",
+        selected_aids=selected_aids,
+    )
+    compare_categories(categories, top_categories, selected_tt)
 
     top_scores = load_and_print_top_similarities(
         categories, top_categories, selected_tt
     )
     top_ents = top_categories["tot_no_entities"].values.tolist()
-    top_categories_plots(top_scores, top_ents)
-
-    # str_i = "Medelhav"
-    # str_j = "Norr"
-
-    # emb_i = create_embedding(str_i)
-    # emb_j = create_embedding(str_j)
-
-    # shortest = range(0, min(emb_i.shape[1], emb_j.shape[1]))
-    # emb_i_reshape = torch.reshape(emb_i[:, shortest, :], (-1,))
-    # emb_j_reshape = torch.reshape(emb_j[:, shortest, :], (-1,))
-
-    # sim = cos(emb_i_reshape, emb_j_reshape)
-    # print(sim.item())
-
+    top_categories_plots(top_scores, top_ents))

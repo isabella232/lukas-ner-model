@@ -7,14 +7,13 @@ from ..utils.file_handling import create_dfs_from_file, read_df_from_file
 
 
 def clean_entities(df):
-
+    """Removes/strips some of the noisiest/weirdest entities found by NERD in order to make a meaningful evaluation. """
     chars = set(punctuation)
     chars.update(["*", "–", "‒", "—", "”", "“", "’", " ", "￭", "✓", "►", "•", "■", "…"])
 
     is_reg_char = lambda x: x not in chars and not x.isdigit()
 
-    to_be_removed = []
-    to_be_duplicated = []
+    to_be_removed, to_be_duplicated = [], []
     for ind in df.index:
         word = df["word"][ind]
         word = word.strip()
@@ -40,14 +39,12 @@ def clean_entities(df):
             to_be_removed += [word]
     cleaned = df[df["word"].apply(lambda x: x not in to_be_removed)]
     cleaned = cleaned.append(to_be_duplicated)
+
     return cleaned
 
 
 def create_entities_df():
     bert_df = create_dfs_from_file("data/output/results_10k.jsonl", False)[1]
-    # bert_df = bert_df[
-    #     bert_df["entity"].apply(lambda x: x in ["PER", "ORG", "LOC"])
-    # ].reset_index(drop=True)
     nerd_df = create_dfs_from_file("data/output/results_nerd_10k.jsonl", False)[1]
 
     nerd_df = clean_entities(nerd_df)
@@ -57,6 +54,7 @@ def create_entities_df():
 
 
 def compare_unique_entities(nerd_df, bert_df):
+    """"To get an idea of difference between entities found by the models."""
     nerd_unique = (
         nerd_df.groupby("word")["entity"].count().index.get_level_values(0).tolist()
     )
@@ -71,6 +69,7 @@ def compare_unique_entities(nerd_df, bert_df):
 
 
 def extract_mentioned_tags():
+    """Extract the article tags mentioned in the text body to use as labels."""
     articles_df = read_df_from_file("data/dataframes/articles_10k_df.jsonl")
 
     tags_dict = []
@@ -85,7 +84,7 @@ def extract_mentioned_tags():
 
 
 def evaluate_against_tags(entities, tags):
-
+    """Perform evaluation against tags."""
     id_list = tags["id"].values
     filtered_entities = entities[entities["article_id"].apply(lambda x: x in id_list)]
     filtered_entities = (
@@ -93,8 +92,8 @@ def evaluate_against_tags(entities, tags):
         .apply(list)
         .reset_index(name="entities")
     )
-    all_tags = []
-    found_tags = []
+
+    all_tags, found_tags = [], []
     for ind in tags.index:
         article_id = tags["id"][ind]
 
@@ -107,28 +106,12 @@ def evaluate_against_tags(entities, tags):
             all_tags += [tag]
             if tag in found:
                 found_tags += [tag]
-            # For when BERT entities were merged too much
-            # else:
-            #     for t in found:
-            #         words = t.split()
-            #         if len(words) > 2:
-            #             combinations = []
-            #             i = 0
-            #             while i < len(words) - 1:
-            #                 combinations += [words[i] + " " + words[i + 1]]
-            #                 i += 1
-            #             if tag in combinations:
-            #                 found_tags += [tag]
 
     return all_tags, found_tags
 
 
-dfs = create_entities_df()
-nerd_df = dfs[0]
-bert_df = dfs[1]
-
+nerd_df, bert_df = create_entities_df()
 # compare_unique_entities(nerd_df, bert_df)
-
 tags_df = extract_mentioned_tags()
 
 print("Evaluating NERD…")
@@ -145,12 +128,3 @@ bert_score = len(bert_found) / len(all_tags)
 
 print(f"NERD score: {len(nerd_found)} / {len(all_tags)} = {nerd_score}")
 print(f"BERT score: {len(bert_found)} / {len(all_tags)} = {bert_score}")
-
-nerd_bert_diff = [x for x in nerd_found if x not in bert_found]
-print(len(nerd_bert_diff))
-# = 108 with filtered BERT, = 41 with unfiltered BERT (minus at least 9)
-[print(entity for entity in nerd_bert_diff)]
-# print("-" * 50)
-# diff = [x for x in all_tags if x not in bert_found]
-# for entity in diff:
-#     print(entity)
