@@ -1,14 +1,13 @@
 import pickle
 import random
+import math
 
 import numpy as np
 import torch
 from torch import nn
 
-from .utils.parse_articles import get_articles
-from .utils.file_handling import write_df_to_file, read_df_from_file
+from .utils.file_handling import read_df_from_file
 from .category_similarity import (
-    binary_search,
     retrieve_embedding,
     rescale,
     calculate_entity_weight,
@@ -16,6 +15,11 @@ from .category_similarity import (
 
 
 def max_similarity(emb_i, emb_j):
+    """Calculates the cosine similarity between two word embeddings.
+
+    If the embedding vectors differ in length, the shorter vector is "slided" over the longer
+    vector and similarity is calculated at each position. Then, the maximum similarity is returned.
+    """
     cos = nn.CosineSimilarity(dim=0)
     sim = 0
 
@@ -68,7 +72,7 @@ def calculate_similarities(categories, articles):
             if cnt > 0:
                 article_entities += [(entities["word"][e], cnt)]
                 tot_cnt += cnt
-        [print(ent) for ent in article_entities]
+
         cat_sim = [0] * no_categories
 
         for j1 in categories.index:
@@ -91,13 +95,14 @@ def calculate_similarities(categories, articles):
                     ent_j = categories["entities"][j1][j2][1]
                     emb_j = retrieve_embedding(ent_j, lookup, embeddings)
 
-                    sim = max_similarity(emb_i, emb_j)
-                    # shortest = range(min(emb_i.shape[1], emb_j.shape[1]))
-                    # emb_i_reshape = torch.reshape(emb_i[:, shortest, :], (-1,))
-                    # emb_j_reshape = torch.reshape(emb_j[:, shortest, :], (-1,))
+                    # Alternative approach
+                    # sim = max_similarity(emb_i, emb_j)
+                    shortest = range(min(emb_i.shape[1], emb_j.shape[1]))
+                    emb_i_reshape = torch.reshape(emb_i[:, shortest, :], (-1,))
+                    emb_j_reshape = torch.reshape(emb_j[:, shortest, :], (-1,))
 
-                    # sim = cos(emb_i_reshape, emb_j_reshape)
-                    single_ent[j2] = sim.item() * w_i  # / math.exp(abs(w_i - w_j))
+                    sim = cos(emb_i_reshape, emb_j_reshape)
+                    single_ent[j2] = sim.item() * w_i / math.exp(abs(w_i - w_j))
                     ent_pair[j2] = (ent_i, ent_j)
 
                 ent_sim[i2] = max(single_ent) if single_ent else 0

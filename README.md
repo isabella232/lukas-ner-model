@@ -29,12 +29,12 @@ The <i>ner</i> directory contains work where the pre-finetuned <b>bert-base-swed
     * analysis.py – for analyzing the found entities in relation to e.g. article categories
     * category_grouping.py – for grouping entities to categories and vice versa from TT articles
     * clouding.py – for creating a word cloud of the most commonly found entities
-* model_evaluation/
+* evaluation/
     * nerd_bert_comparison.py – for comparing the performance of nerd and bert using article tags mentioned in the text as labels
     * evaluator.py – for NER evaluation using NER tagged corpuses
     * bert_evaluation.py – for evaluating KB-BERT using the class in evaluator.py
     * threshold_optimization.py – for analyzing how different thresholds for entity confidence affects output and metrics
-* category_analysis/
+* similarity/
     * article_similarity – attempt to calculate meaningful similarity between articles base on entities found in the text body
     * category_similarity.py – attempt to calculate meaningful similarity between categories based on entities found in article texts
     * categorize_article.py – attempt to categorize articles based on entities found in the text body

@@ -1,8 +1,6 @@
 import pickle
 import math
 import time
-import hashlib
-from collections import Counter
 
 import numpy as np
 import pandas as pd
@@ -12,8 +10,7 @@ import torch
 from torch import nn
 
 
-from .utils.parse_articles import get_articles
-from .utils.file_handling import write_df_to_file, read_df_from_file
+from ..utils.file_handling import read_df_from_file
 
 
 def create_embedding(word):
@@ -35,7 +32,7 @@ def create_sub_lookup(sub_lookup, first_char):
 
 def partition_into_lookup(embeddings):
     """Partitions the entity embeddings based on their first letters."""
-    lookup, sub_llokup = [], []
+    lookup, sub_lookup = [], []
     first_char = embeddings[0]["entity"][0]
 
     for i, emb in enumerate(embeddings):
@@ -329,4 +326,4 @@ if __name__ == "__main__":
         categories, top_categories, selected_tt
     )
     top_ents = top_categories["tot_no_entities"].values.tolist()
-    top_categories_plots(top_scores, top_ents))
+    top_categories_plots(top_scores, top_ents)
