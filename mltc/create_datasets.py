@@ -106,6 +106,158 @@ def transform(
     return pd.DataFrame(transformed)
 
 
+def process_mm_subcategories():
+    articles = get_articles("data/input/articles_mittmedia_subcategories.json")
+
+    codes = [
+        "RYF-TKT-QWJ",
+        "RYF-QPR-HGB",
+        "RYF-KNI-RLW",
+        "RYF-TKT-ZWD",
+        "RYF-KNI-ZIS",
+        "RYF-EOI-DLM",
+        "RYF-VHD-QTT",
+        "RYF-XKI-DEG",
+        "RYF-TKT-MRA",
+        "RYF-TKT-RRC",
+        "RYF-VHD-IFE",
+        "RYF-CUW-XVL",
+        "RYF-BIZ-XSV",
+        "RYF-TKT-SPE",
+        "RYF-WUU-QNB",
+        "RYF-IXA-KEV",
+        "RYF-IXA-LHV",
+        "RYF-KNI-XNS",
+        "RYF-TKT-GSR",
+        "RYF-TKT-PEJ",
+        "RYF-XKI-IHA",
+        "RYF-TKT-HFA",
+        "RYF-AKM-TYE",
+        "RYF-XKI-JIJ",
+        "RYF-XKI-FEY",
+        "RYF-CUW-GIV",
+        "RYF-AKM-AUE",
+        "RYF-TKT-MNX",
+        "RYF-TKT-VVD",
+        "RYF-XKI-HLO",
+        "RYF-BIZ-GCG",
+        "RYF-XKI-SFU",
+        "RYF-HPT-ZSS",
+        "RYF-KNI-OHT",
+        "RYF-BIZ-WZJ",
+        "RYF-AKM-QGJ",
+        "RYF-HPT-YGE",
+        "RYF-HPT-XRQ",
+        "RYF-CUW-LGT",
+        "RYF-WXT-BND",
+        "RYF-HPT-PFF",
+        "RYF-XKI-GJH",
+        "RYF-CUW-JCL",
+        "RYF-TKT-AGB",
+        "RYF-VHD-ZKU",
+        "RYF-ZEI-QWT",
+        "RYF-YDR-MHH",
+        "RYF-VHD-OAY",
+        "RYF-TKT-FGO",
+        "RYF-EOI-DOE",
+        "RYF-XKI-ISL",
+        "RYF-KNI-MRR",
+        "RYF-TKT-ESA",
+        "RYF-TKT-YIG",
+        "RYF-XKI-YFJ",
+        "RYF-IXA-CVI",
+        "RYF-XKI-LNE",
+        "RYF-XKI-WEG",
+        "RYF-YDR-UER",
+        "RYF-IXA-QED",
+        "RYF-EOI-GLR",
+        "RYF-XKI-FXL",
+        "RYF-ITV-LPR",
+        "RYF-TKT-ESN",
+        "RYF-VHD-GUZ",
+        "RYF-YDR-WXH",
+        "RYF-CUW-IAA",
+        "RYF-HPT-XAO",
+        "RYF-XKI-BUS",
+        "RYF-ITV-IQC",
+        "RYF-TKT-INK",
+        "RYF-ITV-QAK",
+        "RYF-TKT-PYI",
+        "RYF-WUU-SUX",
+        "RYF-HPT-THK",
+        "RYF-CUW-AEJ",
+        "RYF-XKI-YBJ",
+        "RYF-TKT-EPN",
+        "RYF-ZEI-RYD",
+        "RYF-WUU-JZK",
+        "RYF-KNI-SQH",
+        "RYF-EOI-GJM",
+        "RYF-ZEI-CLV",
+        "RYF-WHZ-LAW",
+    ]
+    cat_dict = dict(zip(list(codes), [0] * len(codes)))
+
+    _, _, mapping, cat_dict_top = get_category_codes(True)
+
+    cat_dict = {**cat_dict, **cat_dict_top}
+
+    transformed = []
+    for article in articles:
+        aid = article["identifier"]["id"]
+        categories = cat_dict.copy()
+        brand = "MM"
+        text = article["content_text"]
+        if re.search("<.*>", text):
+            continue
+
+        for tag in article["tags"]:
+            category = tag["category"]
+            categories[category] = 1
+            categories[mapping[category[:-4]]] = 1
+        if not text or sum(categories.values()) == 0:
+            continue
+
+        transformed += [{"aid": aid, "brand": brand, "text": text, **categories}]
+
+    df = pd.DataFrame(transformed)
+    df = df.drop_duplicates(subset=["aid"])
+
+    pruned_df = None
+    seed = 1234567890
+    for i in df.columns[3:-17]:
+        filt = df[df[i] == 1].copy()
+        if filt[i].count() > 500:
+            filt = filt.sample(500, random_state=seed)
+        if pruned_df is None:
+            pruned_df = filt.reset_index(drop=True)
+            print(pruned_df)
+        else:
+            pruned_df = pruned_df.append(filt, ignore_index=True)
+
+    pruned_df = pruned_df.drop_duplicates(subset=["aid"])
+    check_category_distribution(pruned_df)
+    print(pruned_df.shape[0])
+
+    train = df.sample(frac=0.85, random_state=seed)
+    test = df.drop(train.index)
+
+    split_and_save(train, "train_sub.csv", "train_sub_parent_labels.csv")
+    split_and_save(test, "test_sub.csv", "test_sub_parent_labels.csv")
+
+
+def split_and_save(df, file_1, file_2):
+    top = df.iloc[:, -17:].copy()
+    top["aid"] = df["aid"].values
+    cols = top.columns.tolist()
+    cols = cols[-1:] + cols[:-1]
+    top = top[cols]
+
+    df.drop(df.columns[-17:], axis=1, inplace=True)
+
+    df.to_csv("mltc/data/datasets/" + file_1, index=False)
+    top.to_csv("mltc/data/datasets/" + file_2, index=False)
+
+
 def smooth_category_distribution(tt_df, mm_df, iptc_codes):
     df = pd.DataFrame()
     for code in iptc_codes:
@@ -155,6 +307,8 @@ if __name__ == "__main__":
         "Krig, konflikter och oroligheter",
         "Väder",
     ]
+
+    process_mm_subcategories()
 
     tt_articles = get_articles("data/input/articles_tt_culture.jsonl")
     mm_articles = get_articles("data/input/articles_mittmedia_culture.json")

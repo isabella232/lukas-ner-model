@@ -1,8 +1,6 @@
-import random
 from collections import Counter
 
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 from PIL import Image
 from wordcloud import WordCloud, ImageColorGenerator
@@ -11,7 +9,6 @@ from ..utils.file_handling import read_df_from_file
 
 
 entities = read_df_from_file("data/dataframes/merged_entities_10k_df.jsonl")
-
 entities_duplicated = []
 
 for i in entities.index:
@@ -39,4 +36,3 @@ plt.axis("off")
 plt.show()
 
 entity_cloud.to_file("images/entity_cloud.png")
-

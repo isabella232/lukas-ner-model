@@ -22,11 +22,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# Prepare model
 def get_base_model(num_labels):
     BASE_PATH = "mltc/data/model_files/"
     config = BASE_PATH + "config.json"
-    model_state_dict = torch.load(BASE_PATH + "finetuned_2020-08-10_pytorch_model.bin")
+    model_state_dict = torch.load(BASE_PATH + "pytorch_model.bin")
 
     model = BertForMultiLabelSequenceClassification.from_pretrained(
         config, num_labels=num_labels, state_dict=model_state_dict, num_labels_parent=17
@@ -77,7 +76,7 @@ if __name__ == "__main__":
         "learning_rate": 3e-5,
         "warmup_proportion": 0.1,
         "seed": 1234567890,
-        "do_train": False,
+        "do_train": True,
     }
 
     random.seed(args["seed"])
@@ -86,25 +85,23 @@ if __name__ == "__main__":
 
     logger.info("Initializing…")
     tokenizer = get_tokenizer()
-    processor = MultiLabelTextProcessor(tokenizer, logger, "top_categories.txt")
+    processor = MultiLabelTextProcessor(tokenizer, logger, "sub_categories.txt")
     model = get_base_model(len(processor.labels))
 
     if args["do_train"]:
         logger.info("Training…")
         trainer = ModelTrainer(args, processor, model, logger)
-        trainer.prepare_training_data(
-            "train_small.csv", "train_small_parent_labels.csv"
-        )
+        trainer.prepare_training_data("train_sub.csv", "train_sub_parent_labels.csv")
         trainer.train()
 
     logger.info("Evaluating…")
     evaluator = ModelEvaluator(args, processor, model, logger)
-    evaluator.prepare_eval_data("eval_small.csv", "eval_small_parent_labels.csv")
+    evaluator.prepare_eval_data("test_sub.csv", "test_sub_parent_labels.csv")
     results = evaluator.evaluate()
     print(results)
 
     # results = evaluator.predict("test.csv")
-    # TODO: kika layer size
     # TODO: jämföra epoch eval loss för att hitta optimalt antal träningsepoker
     # TODO: sätta alla för små kategori i en övrigt-kategori
+    # TODO: visa exempel efter varje epok
 

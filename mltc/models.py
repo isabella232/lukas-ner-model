@@ -78,7 +78,7 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
 
         if parent_labels is not None:
             pooled_output = torch.cat((pooled_output, parent_labels), 1)
-            
+
         pooled_output = self.dropout(pooled_output)
         logits = self.classifier(pooled_output)
 
@@ -124,6 +124,8 @@ class BertForMultiLabelSequenceClassification(BertForSequenceClassification):
 class BertForMultilabelSpecialized(BertForMultiLabelSequenceClassification):
     """A subclass that freezes the layers from a pretrained classifier whilst adding
     an additional transformer block that is finetuned during training.
+
+    The size of a saved model (without the base blocks) is ~28.4 MB.
     """
 
     def __init__(self, config, num_labels=2):

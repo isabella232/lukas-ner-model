@@ -127,4 +127,4 @@ class ModelTrainer:
                 f"Learning rate after epoch {i_+1}: {self.scheduler.get_last_lr()[0]}"
             )
 
-        # self.model.save()
+        self.model.save()

@@ -134,7 +134,7 @@ class ModelEvaluator:
             # "confusion_matrices": confusion_matrices,
         }
 
-        # self.save_result(result)
+        self.save_result(result)
         return result
 
     def save_result(self, result):
@@ -173,7 +173,6 @@ class ModelEvaluator:
         all_logits = None
         self.model.eval()
 
-        nb_eval_steps, nb_eval_examples = 0, 0
         for step, batch in enumerate(
             tqdm(test_dataloader, desc="Prediction Iteration")
         ):
@@ -191,9 +190,6 @@ class ModelEvaluator:
                 all_logits = np.concatenate(
                     (all_logits, logits.detach().cpu().numpy()), axis=0
                 )
-
-            nb_eval_examples += input_ids.size(0)
-            nb_eval_steps += 1
 
         label_names = [
             "Konst, kultur och nöje",
