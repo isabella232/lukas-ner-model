@@ -25,7 +25,7 @@ def calculate_average_score(df):
             scores = df["score"][i]
             tot_score += sum(scores)
             no_scores += len(scores)
-        avg_score = tot_score(no_scores)
+        avg_score = tot_score / no_scores
     else:
         avg_score = df["score"].mean()
 
@@ -90,7 +90,7 @@ def initial_analysis(articles, entities, desired):
 
 def merge_entities(df):
     """Merges similar entities based on their lemmatized form with the purpose
-    to reduce spelling/formatting/suffixes variations.
+    to reduce spelling/capitalization/inflection variations.
     """
     lemmatizer = lemmy.load("sv")
     lemmatize = lambda x: lemmatizer.lemmatize("PROPN", x)[0].lower()
@@ -119,7 +119,7 @@ def merge_entities(df):
     return deduplicated
 
 
-articles, entities, desired = create_data_frames("data/output/results_tt_new.jsonl")
+articles, entities, desired = create_data_frames("data/output/results_10k.jsonl")
 initial_analysis(articles, entities, desired)
 
 df = desired.groupby("word")["article_id"].apply(list).reset_index(name="article_ids")

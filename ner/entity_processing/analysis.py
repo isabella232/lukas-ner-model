@@ -112,6 +112,9 @@ if __name__ == "__main__":
     per_article = per_article.sort_values(by=["no_entities"], ascending=False)
 
     f1 = plt.figure(1)
+    f1.suptitle("Article-Wise")
+    plt.xlabel("Number of Found Entities")
+    plt.ylabel("Article Length")
     linear_regression(per_article["no_entities"], per_article["article_len"])
     f1.show()
 
@@ -121,6 +124,9 @@ if __name__ == "__main__":
     categories = link_entities_to_categories(merged_entities, categories)
     print("Done analyzing!")
     f2 = plt.figure(2)
+    f2.suptitle("Category-Wise")
+    plt.xlabel("Number of Distinct Entities")
+    plt.ylabel("Total number of entities")
     linear_regression(categories["no_unique_entities"], categories["tot_no_entities"])
     f2.show()
 
@@ -128,4 +134,4 @@ if __name__ == "__main__":
     categories.hist(bins=70)
     plt.show()
 
-    # write_df_to_file(categories, "data/dataframes/categories_10k_df.jsonl")
+    write_df_to_file(categories, "data/dataframes/categories_10k_df.jsonl")
