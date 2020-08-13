@@ -46,7 +46,7 @@ The <i>ner</i> directory contains work where the pre-finetuned <b>bert-base-swed
 If NER is to be performed on new article datasets, the scripts under entity_processing above are generally supposed to be run in the order in which they are listed. The reason being that the output from one script often is used as input to another.
 
 ## Multi-Label Text Classification (MLTC)
-The <i>mltc</i> directory contains work where <b>bert-base-swedish-cased</b> is finetuned for hierarchical multi-label text classification. Aiming to create a classifier that is able to predict the category/categories of news articles, the models are trained and evaluated on texts from MittMedia and TT, which both employ IPTC subject codes for categorizing.
+The <i>mltc</i> directory contains work where <b>bert-base-swedish-cased</b> is finetuned for hierarchical multi-label text classification. Aiming to create a classifier that is able to predict the category/categories of news articles, the models are trained and evaluated on texts from MittMedia and TT, which both employ IPTC subject codes for categorizing. The basis for the finetuned model is heavily inspired by the one described in this [article](https://medium.com/huggingface/multi-label-text-classification-using-bert-the-mighty-transformer-69714fa3fb3d).
 
 * create_datasets.py – for creating datasets from TT and MittMedia articles for training and evaluation
 * runner.py – for creating, loading and using classifiers
