@@ -25,18 +25,18 @@ data-warehouse-bn.content.article_deduplicated</i> in BigQuery, while the articl
 The <i>ner</i> directory contains work where the pre-finetuned <b>bert-base-swedish-cased-ner</b> is evaluated at NER, as well as exploratory work regarding the applications of NER.
 
 * entity_processing/
-    * recognition.py – for performing NER on a dataset of articles, essentially the same code used in the krangy repository
+    * recognition.py – for performing NER on a dataset of articles, essentially the same code used in the <i>krangy</i> repository
     * cleaning.py – for "cleaning" up the NER output and some initial basic analysis
-    * analysis.py – for analyzing the found entities in relation to e.g. article categories
+    * analysis.py – for analyzing outputted entities in relation to e.g. article categories
     * category_grouping.py – for grouping entities to categories and vice versa from TT articles
     * clouding.py – for creating a word cloud of the most commonly found entities
 * evaluation/
-    * nerd_bert_comparison.py – for comparing the performance of nerd and bert using article tags mentioned in the text as labels
-    * evaluator.py – for NER evaluation using NER tagged corpuses
+    * nerd_bert_comparison.py – for comparing the performance of KB-BERT and NERD using article tags mentioned in the text as labels
+    * evaluator.py – for evaluation using NER tagged corpuses
     * bert_evaluation.py – for evaluating KB-BERT using the class in evaluator.py
-    * threshold_optimization.py – for analyzing how different thresholds for entity confidence affects output and metrics
+    * threshold_optimization.py – for analyzing how different thresholds for entity confidence affect entity output and metrics
 * similarity/
-    * article_similarity – attempt to calculate meaningful similarity between articles base on entities found in the text body
+    * article_similarity – attempt to calculate meaningful similarity between articles by using BERT embedddings on the entire text body
     * category_similarity.py – attempt to calculate meaningful similarity between categories based on entities found in article texts
     * categorize_article.py – attempt to categorize articles based on entities found in the text body
 * tt_specific/
